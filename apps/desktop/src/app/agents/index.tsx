@@ -304,14 +304,6 @@ function StreamLine({ active, entry }: { active: boolean; entry: SubagentStreamE
   )
 }
 
-function indicatorTone(status: SubagentStatus, running: boolean): string {
-  if (running) return 'bg-primary/15 text-primary ring-2 ring-primary/30'
-  if (status === 'failed' || status === 'interrupted') return 'bg-destructive/15 text-destructive'
-  if (status === 'completed') return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-
-  return 'bg-muted text-muted-foreground/85'
-}
-
 function SubagentRow({ node, depth = 0, nowMs }: { node: SubagentNode; depth?: number; nowMs: number }) {
   const running = node.status === 'running' || node.status === 'queued'
   const elapsed = useElapsedSeconds(running, `subagent:${node.id}`)
@@ -325,7 +317,6 @@ function SubagentRow({ node, depth = 0, nowMs }: { node: SubagentNode; depth?: n
 
   const visibleRows = open ? node.stream.slice(-10) : node.stream.slice(-2)
   const fileLines = [...node.filesWritten.map(p => `+ ${p}`), ...node.filesRead.map(p => `· ${p}`)]
-  const step = node.taskCount > 1 ? `${node.taskIndex + 1}` : ''
 
   const subtitle = [
     node.model,
@@ -345,16 +336,20 @@ function SubagentRow({ node, depth = 0, nowMs }: { node: SubagentNode; depth?: n
       >
         <span
           className={cn(
-            'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[0.65rem] font-medium tabular-nums',
-            indicatorTone(node.status, running)
+            'mt-1 flex size-4 shrink-0 items-center justify-center text-[0.82rem] leading-none',
+            running
+              ? 'text-primary'
+              : node.status === 'failed' || node.status === 'interrupted'
+                ? 'text-destructive'
+                : node.status === 'completed'
+                  ? 'text-emerald-500'
+                  : 'text-muted-foreground/70'
           )}
         >
-          {step ? (
-            step
-          ) : running ? (
+          {running ? (
             <BrailleSpinner ariaLabel="Running" className="text-[0.82rem]" spinner="breathe" />
           ) : (
-            <span className="text-[0.78rem] leading-none">{STATUS_GLYPH[node.status]}</span>
+            STATUS_GLYPH[node.status]
           )}
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
