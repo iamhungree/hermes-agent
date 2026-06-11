@@ -630,21 +630,25 @@ class DockerEnvironment(BaseEnvironment):
         """Stop and remove the container. Bind-mount dirs persist if persistent=True."""
         if self._container_id:
             try:
-                # Stop in background so cleanup doesn't block
-                stop_cmd = (
-                    f"(timeout 60 {self._docker_exe} stop {self._container_id} || "
-                    f"{self._docker_exe} rm -f {self._container_id}) >/dev/null 2>&1 &"
+                # Stop in background so cleanup doesn't block.
+                # List args (no shell=True) prevent shell-injection if container_id
+                # ever contains unexpected characters.
+                subprocess.Popen(
+                    [self._docker_exe, "stop", "--time", "60", self._container_id],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
                 )
-                subprocess.Popen(stop_cmd, shell=True)
             except Exception as e:
                 logger.warning("Failed to stop container %s: %s", self._container_id, e)
 
             if not self._persistent:
-                # Also schedule removal (stop only leaves it as stopped)
+                # Also schedule removal (stop only leaves it as stopped).
+                # Popen itself is non-blocking; no shell=True needed for background exec.
                 try:
                     subprocess.Popen(
-                        f"sleep 3 && {self._docker_exe} rm -f {self._container_id} >/dev/null 2>&1 &",
-                        shell=True,
+                        [self._docker_exe, "rm", "-f", self._container_id],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
                     )
                 except Exception:
                     pass

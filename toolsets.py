@@ -561,7 +561,7 @@ def get_toolset(name: str) -> Optional[Dict[str, Any]]:
 
     try:
         from tools.registry import registry
-    except Exception:
+    except ImportError:
         return toolset if toolset else None
 
     if toolset:
@@ -703,7 +703,7 @@ def _get_plugin_toolset_names() -> Set[str]:
             for toolset_name in registry.get_registered_toolset_names()
             if toolset_name not in TOOLSETS
         }
-    except Exception:
+    except ImportError:
         return set()
 
 
@@ -712,7 +712,7 @@ def _get_registry_toolset_aliases() -> Dict[str, str]:
     try:
         from tools.registry import registry
         return registry.get_registered_toolset_aliases()
-    except Exception:
+    except ImportError:
         return {}
 
 
