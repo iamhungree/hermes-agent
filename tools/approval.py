@@ -424,7 +424,14 @@ DANGEROUS_PATTERNS_COMPILED = [
 
 def _legacy_pattern_key(pattern: str) -> str:
     """Reproduce the old regex-derived approval key for backwards compatibility."""
-    return pattern.split(r'\b')[1] if r'\b' in pattern else pattern[:20]
+    if r'\b' not in pattern:
+        return pattern[:20]
+    key = pattern.split(r'\b')[1]
+    # Guard against patterns that contain \b only at the very end (e.g. built
+    # with _CMDPOS prefix): split()[1] would be '' and every such pattern would
+    # alias to the same empty string in _PATTERN_KEY_ALIASES, causing spurious
+    # cross-pattern approval matches if '' ever appears in a stored allowlist.
+    return key if key else pattern[:20]
 
 
 _PATTERN_KEY_ALIASES: dict[str, set[str]] = {}
