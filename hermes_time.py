@@ -28,7 +28,6 @@ except ImportError:
     from backports.zoneinfo import ZoneInfo  # type: ignore[no-redef]
 
 # Cached state — resolved once, reused on every call.
-# Call reset_cache() to force re-resolution (e.g. after config changes).
 _cached_tz: Optional[ZoneInfo] = None
 _cached_tz_name: Optional[str] = None
 _cache_resolved: bool = False
@@ -78,7 +77,7 @@ def _get_zoneinfo(name: str) -> Optional[ZoneInfo]:
 def get_timezone() -> Optional[ZoneInfo]:
     """Return the user's configured ZoneInfo, or None (meaning server-local).
 
-    Resolved once and cached. Call ``reset_cache()`` after config changes.
+    Resolved once and cached.
     """
     global _cached_tz, _cached_tz_name, _cache_resolved
     if not _cache_resolved:
