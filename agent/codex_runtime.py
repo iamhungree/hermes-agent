@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from types import SimpleNamespace
 from typing import Any, Dict, List
 
@@ -267,13 +268,17 @@ def run_codex_stream(agent, api_kwargs: dict, client: Any = None, on_first_delta
                 return final_response
         except (_httpx.RemoteProtocolError, _httpx.ReadTimeout, _httpx.ConnectError, ConnectionError) as exc:
             if attempt < max_stream_retries:
+                from agent.retry_utils import jittered_backoff
+                delay = jittered_backoff(attempt + 1, base_delay=1.0, max_delay=8.0)
                 logger.debug(
-                    "Codex Responses stream transport failed (attempt %s/%s); retrying. %s error=%s",
+                    "Codex Responses stream transport failed (attempt %s/%s); retrying in %.1fs. %s error=%s",
                     attempt + 1,
                     max_stream_retries + 1,
+                    delay,
                     agent._client_log_context(),
                     exc,
                 )
+                time.sleep(delay)
                 continue
             logger.debug(
                 "Codex Responses stream transport failed; falling back to create(stream=True). %s error=%s",
@@ -312,13 +317,17 @@ def run_codex_stream(agent, api_kwargs: dict, client: Any = None, on_first_delta
                 or "Expected to have received \"response.created\"" in err_text
             )
             if (missing_completed or prelude_error) and attempt < max_stream_retries:
+                from agent.retry_utils import jittered_backoff
+                delay = jittered_backoff(attempt + 1, base_delay=1.0, max_delay=8.0)
                 logger.debug(
-                    "Responses stream %s (attempt %s/%s); retrying. %s",
+                    "Responses stream %s (attempt %s/%s); retrying in %.1fs. %s",
                     "prelude rejected" if prelude_error else "closed before completion",
                     attempt + 1,
                     max_stream_retries + 1,
+                    delay,
                     agent._client_log_context(),
                 )
+                time.sleep(delay)
                 continue
             if missing_completed or prelude_error:
                 logger.debug(
