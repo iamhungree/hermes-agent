@@ -68,6 +68,7 @@ def get_hermes_home() -> Path:
     # the fallback to the default profile is almost certainly wrong.
     global _profile_fallback_warned
     if not _profile_fallback_warned:
+        _profile_fallback_warned = True  # set before I/O so repeated calls skip this block
         try:
             # Inline the default-root resolution from get_default_hermes_root()
             # to stay import-safe (this function is called from module scope
@@ -77,7 +78,6 @@ def get_hermes_home() -> Path:
         except (UnicodeDecodeError, OSError):
             active = ""
         if active and active != "default":
-            _profile_fallback_warned = True
             # Write directly to stderr.  We intentionally do NOT route this
             # through ``logging`` because (a) this function is called at
             # module-import time from 30+ sites, often before logging is
