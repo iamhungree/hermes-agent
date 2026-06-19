@@ -300,7 +300,7 @@ class PairingStore:
             for entry_id, entry in pending.items():
                 if not isinstance(entry, dict):
                     continue
-                if "salt" not in entry or "hash" not in entry:
+                if "salt" not in entry or "hash" not in entry or "user_id" not in entry:
                     continue
                 try:
                     salt = bytes.fromhex(entry["salt"])
