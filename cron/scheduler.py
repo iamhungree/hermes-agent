@@ -1640,9 +1640,6 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
                     if _idle_secs >= _cron_inactivity_limit:
                         _inactivity_timeout = True
                         break
-        except Exception:
-            _cron_pool.shutdown(wait=False, cancel_futures=True)
-            raise
         finally:
             _cron_pool.shutdown(wait=False, cancel_futures=True)
 

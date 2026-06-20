@@ -122,7 +122,7 @@ def _normalize_chat_content(
     if content is None:
         return ""
     if isinstance(content, str):
-        return content[:MAX_NORMALIZED_TEXT_LENGTH] if len(content) > MAX_NORMALIZED_TEXT_LENGTH else content
+        return content[:MAX_NORMALIZED_TEXT_LENGTH]
 
     if isinstance(content, list):
         parts: List[str] = []
@@ -149,12 +149,12 @@ def _normalize_chat_content(
             if sum(len(p) for p in parts) >= MAX_NORMALIZED_TEXT_LENGTH:
                 break
         result = "\n".join(parts)
-        return result[:MAX_NORMALIZED_TEXT_LENGTH] if len(result) > MAX_NORMALIZED_TEXT_LENGTH else result
+        return result[:MAX_NORMALIZED_TEXT_LENGTH]
 
     # Fallback for unexpected types (int, float, bool, etc.)
     try:
         result = str(content)
-        return result[:MAX_NORMALIZED_TEXT_LENGTH] if len(result) > MAX_NORMALIZED_TEXT_LENGTH else result
+        return result[:MAX_NORMALIZED_TEXT_LENGTH]
     except Exception:
         return ""
 
@@ -189,7 +189,7 @@ def _normalize_multimodal_content(content: Any) -> Any:
     if content is None:
         return ""
     if isinstance(content, str):
-        return content[:MAX_NORMALIZED_TEXT_LENGTH] if len(content) > MAX_NORMALIZED_TEXT_LENGTH else content
+        return content[:MAX_NORMALIZED_TEXT_LENGTH]
     if not isinstance(content, list):
         # Mirror the legacy text-normalizer's fallback so callers that
         # pre-existed image support still get a string back.
