@@ -6755,7 +6755,11 @@ def _(rid, params: dict) -> dict:
     if not cmd:
         return _err(rid, 4004, "empty command")
     try:
-        from tools.approval import detect_dangerous_command
+        from tools.approval import detect_dangerous_command, detect_hardline_command
+
+        is_hardline, hardline_desc = detect_hardline_command(cmd)
+        if is_hardline:
+            return _err(rid, 4005, f"blocked (hardline): {hardline_desc}.")
 
         is_dangerous, _, desc = detect_dangerous_command(cmd)
         if is_dangerous:
