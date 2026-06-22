@@ -1169,7 +1169,6 @@ def check_all_command_guards(command: str, env_type: str,
                     "smart_approved": True,
                     "description": combined_desc_for_llm}
         elif verdict == "deny":
-            combined_desc_for_llm = "; ".join(desc for _, desc, _ in warnings)
             return {
                 "approved": False,
                 "message": f"BLOCKED by smart approval: {combined_desc_for_llm}. "
