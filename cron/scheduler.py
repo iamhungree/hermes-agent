@@ -1641,7 +1641,6 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
                         _inactivity_timeout = True
                         break
         except Exception:
-            _cron_pool.shutdown(wait=False, cancel_futures=True)
             raise
         finally:
             _cron_pool.shutdown(wait=False, cancel_futures=True)

@@ -32,6 +32,7 @@ import tarfile
 import tempfile
 import threading
 import time
+import urllib.parse
 import urllib.request
 
 from hermes_constants import get_hermes_home
@@ -255,7 +256,8 @@ def _download_file(url: str, dest: str, timeout: int = 10):
     """Download a URL to a local file."""
     req = urllib.request.Request(url)
     token = os.getenv("GITHUB_TOKEN")
-    if token:
+    parsed_host = urllib.parse.urlparse(url).hostname or ""
+    if token and (parsed_host == "github.com" or parsed_host.endswith(".github.com")):
         req.add_header("Authorization", f"token {token}")
     with urllib.request.urlopen(req, timeout=timeout) as resp, open(dest, "wb") as f:
         shutil.copyfileobj(resp, f)
