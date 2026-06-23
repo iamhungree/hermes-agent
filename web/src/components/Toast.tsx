@@ -18,16 +18,18 @@ export function Toast({ toast }: { toast: { message: string; type: "success" | "
 
   if (!current) return null;
 
+  const isError = current.type === "error";
+
   // Portal to document.body so the toast escapes any ancestor stacking context
   // (e.g. <main> has `relative z-2`, which would trap z-50 below the header's z-40).
   return createPortal(
     <div
-      role="status"
-      aria-live="polite"
-      className={`fixed top-16 right-4 z-50 border px-4 py-2.5 font-courier text-xs tracking-wider uppercase backdrop-blur-sm ${
-        current.type === "success"
-          ? "bg-success/15 text-success border-success/30"
-          : "bg-destructive/15 text-destructive border-destructive/30"
+      role={isError ? "alert" : "status"}
+      aria-live={isError ? "assertive" : "polite"}
+      className={`fixed top-16 right-4 z-50 border px-4 py-2.5 font-courier text-xs tracking-wider backdrop-blur-sm ${
+        isError
+          ? "bg-destructive/15 text-destructive border-destructive/30"
+          : "bg-success/15 text-success border-success/30"
       }`}
       style={{
         animation: visible ? "toast-in 200ms ease-out forwards" : "toast-out 200ms ease-in forwards",
