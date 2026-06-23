@@ -282,7 +282,7 @@ function EnvVarRow({
               onClick={() => onClear(varKey)}
               disabled={saving === varKey || clearDialogOpen}
             >
-              {saving === varKey ? "..." : t.common.clear}
+              {saving === varKey ? "Clearing…" : t.common.clear}
             </Button>
           )}
         </div>
@@ -313,7 +313,7 @@ function EnvVarRow({
             prefix={<Save />}
             disabled={saving === varKey || !edits[varKey]}
           >
-            {saving === varKey ? "..." : t.common.save}
+            {saving === varKey ? "Saving…" : t.common.save}
           </Button>
           <Button
             size="sm"
