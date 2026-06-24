@@ -26,7 +26,7 @@ Lifecycle:
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 class ContextEngine(ABC):
@@ -75,7 +75,7 @@ class ContextEngine(ABC):
         """
 
     @abstractmethod
-    def should_compress(self, prompt_tokens: int = None) -> bool:
+    def should_compress(self, prompt_tokens: Optional[int] = None) -> bool:
         """Return True if compaction should fire this turn."""
 
     @abstractmethod

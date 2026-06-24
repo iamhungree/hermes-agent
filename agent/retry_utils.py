@@ -33,7 +33,7 @@ def jittered_backoff(
             range.  0.5 means jitter is uniform in [0, 0.5 * delay].
 
     Returns:
-        Delay in seconds: min(base * 2^(attempt-1), max_delay) + jitter.
+        Delay in seconds, capped at max_delay (including jitter).
 
     The jitter decorrelates concurrent retries so multiple sessions
     hitting the same provider don't all retry at the same instant.
@@ -54,4 +54,4 @@ def jittered_backoff(
     rng = random.Random(seed)
     jitter = rng.uniform(0, jitter_ratio * delay)
 
-    return delay + jitter
+    return min(delay + jitter, max_delay)
