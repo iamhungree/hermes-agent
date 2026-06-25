@@ -401,7 +401,7 @@ def run_codex_create_stream_fallback(agent, api_kwargs: dict, client: Any = None
                     done_item = event.get("item")
                 if done_item is not None:
                     collected_output_items.append(done_item)
-            elif event_type in {"response.output_text.delta",}:
+            elif event_type == "response.output_text.delta":
                 delta = getattr(event, "delta", "")
                 if not delta and isinstance(event, dict):
                     delta = event.get("delta", "")

@@ -1640,9 +1640,6 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
                     if _idle_secs >= _cron_inactivity_limit:
                         _inactivity_timeout = True
                         break
-        except Exception:
-            _cron_pool.shutdown(wait=False, cancel_futures=True)
-            raise
         finally:
             _cron_pool.shutdown(wait=False, cancel_futures=True)
 
@@ -1911,14 +1908,10 @@ def tick(verbose: bool = True, adapters=None, loop=None) -> int:
         # profile .env load into os.environ with snapshot/restore. They MUST run
         # sequentially to avoid corrupting each other. Jobs without either field
         # stay parallel-safe.
-        sequential_jobs = [
-            j for j in due_jobs
-            if (j.get("workdir") or "").strip() or (j.get("profile") or "").strip()
-        ]
-        parallel_jobs = [
-            j for j in due_jobs
-            if not ((j.get("workdir") or "").strip() or (j.get("profile") or "").strip())
-        ]
+        sequential_jobs, parallel_jobs = [], []
+        for _j in due_jobs:
+            bucket = sequential_jobs if ((_j.get("workdir") or "").strip() or (_j.get("profile") or "").strip()) else parallel_jobs
+            bucket.append(_j)
 
         _results: list = []
 
