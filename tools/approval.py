@@ -1006,10 +1006,9 @@ def check_dangerous_command(command: str, env_type: str,
             "description": description,
         }
 
-    if choice == "session":
+    if choice in ("session", "always"):
         approve_session(session_key, pattern_key)
-    elif choice == "always":
-        approve_session(session_key, pattern_key)
+    if choice == "always":
         approve_permanent(pattern_key)
         save_permanent_allowlist(_permanent_approved)
 
@@ -1338,10 +1337,10 @@ def check_all_command_guards(command: str, env_type: str,
 
             # User approved — persist based on scope (same logic as CLI)
             for key, _, is_tirith in warnings:
-                if choice == "session" or (choice == "always" and is_tirith):
+                if choice in ("session", "always"):
                     approve_session(session_key, key)
-                elif choice == "always":
-                    approve_session(session_key, key)
+                if choice == "always" and not is_tirith:
+                    # tirith findings: session-only (no broad permanent allowlisting)
                     approve_permanent(key)
                     save_permanent_allowlist(_permanent_approved)
                 # choice == "once": no persistence — command allowed this
@@ -1414,12 +1413,10 @@ def check_all_command_guards(command: str, env_type: str,
 
     # Persist approval for each warning individually
     for key, _, is_tirith in warnings:
-        if choice == "session" or (choice == "always" and is_tirith):
-            # tirith: session only (no permanent broad allowlisting)
+        if choice in ("session", "always"):
             approve_session(session_key, key)
-        elif choice == "always":
-            # dangerous patterns: permanent allowed
-            approve_session(session_key, key)
+        if choice == "always" and not is_tirith:
+            # tirith findings: session-only; dangerous patterns: permanent
             approve_permanent(key)
             save_permanent_allowlist(_permanent_approved)
 
