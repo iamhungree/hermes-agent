@@ -263,6 +263,10 @@ def save_url_image(
             path.unlink()
         except OSError:
             pass
+        try:
+            response.close()
+        except Exception:
+            pass
         raise
 
     if bytes_written == 0:

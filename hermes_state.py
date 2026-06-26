@@ -29,6 +29,11 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 logger = logging.getLogger(__name__)
 
+
+def _like_escape(s: str) -> str:
+    """Escape backslashes, percent signs, and underscores for SQLite LIKE patterns."""
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
 T = TypeVar("T")
 
 DEFAULT_DB_PATH = get_hermes_home() / "state.db"
@@ -964,12 +969,7 @@ class SessionDB:
         if exact:
             return exact["id"]
 
-        escaped = (
-            session_id_or_prefix
-            .replace("\\", "\\\\")
-            .replace("%", "\\%")
-            .replace("_", "\\_")
-        )
+        escaped = _like_escape(session_id_or_prefix)
         with self._lock:
             cursor = self._conn.execute(
                 "SELECT id FROM sessions WHERE id LIKE ? ESCAPE '\\' ORDER BY started_at DESC LIMIT 2",
@@ -1087,7 +1087,7 @@ class SessionDB:
 
         # Also search for numbered variants: "title #2", "title #3", etc.
         # Escape SQL LIKE wildcards (%, _) in the title to prevent false matches
-        escaped = title.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        escaped = _like_escape(title)
         with self._lock:
             cursor = self._conn.execute(
                 "SELECT id, title, started_at FROM sessions "
@@ -1118,7 +1118,7 @@ class SessionDB:
 
         # Find all existing numbered variants
         # Escape SQL LIKE wildcards (%, _) in the base to prevent false matches
-        escaped = base.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        escaped = _like_escape(base)
         with self._lock:
             cursor = self._conn.execute(
                 "SELECT title FROM sessions WHERE title = ? OR title LIKE ? ESCAPE '\\'",
@@ -2294,7 +2294,7 @@ class SessionDB:
                 token_clauses = []
                 like_params: list = []
                 for tok in non_op_tokens:
-                    esc = tok.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                    esc = _like_escape(tok)
                     token_clauses.append(
                         "(m.content LIKE ? ESCAPE '\\' OR m.tool_name LIKE ? ESCAPE '\\' OR m.tool_calls LIKE ? ESCAPE '\\')"
                     )

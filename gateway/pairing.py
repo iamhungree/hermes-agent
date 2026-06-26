@@ -159,6 +159,8 @@ class PairingStore:
         for p in platforms:
             approved = self._load_json(self._approved_path(p))
             for uid, info in approved.items():
+                if not isinstance(info, dict):
+                    info = {}
                 results.append({"platform": p, "user_id": uid, **info})
         return results
 
