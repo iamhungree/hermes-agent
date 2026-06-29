@@ -11,6 +11,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import uuid
 from typing import Optional
 
@@ -310,6 +311,7 @@ class DockerEnvironment(BaseEnvironment):
         self._forward_env = _normalize_forward_env_names(forward_env)
         self._env = _normalize_env_dict(env)
         self._container_id: Optional[str] = None
+        self._cleanup_lock = threading.Lock()
         logger.info(f"DockerEnvironment volumes: {volumes}")
         # Ensure volumes is a list (config.yaml could be malformed)
         if volumes is not None and not isinstance(volumes, list):
@@ -628,31 +630,32 @@ class DockerEnvironment(BaseEnvironment):
 
     def cleanup(self):
         """Stop and remove the container. Bind-mount dirs persist if persistent=True."""
-        if self._container_id:
-            try:
-                # Stop in background so cleanup doesn't block.
-                # List args (no shell=True) prevent shell-injection if container_id
-                # ever contains unexpected characters.
-                subprocess.Popen(
-                    [self._docker_exe, "stop", "--time", "60", self._container_id],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            except Exception as e:
-                logger.warning("Failed to stop container %s: %s", self._container_id, e)
-
-            if not self._persistent:
-                # Also schedule removal (stop only leaves it as stopped).
-                # Popen itself is non-blocking; no shell=True needed for background exec.
+        with self._cleanup_lock:
+            if self._container_id:
                 try:
+                    # Stop in background so cleanup doesn't block.
+                    # List args (no shell=True) prevent shell-injection if container_id
+                    # ever contains unexpected characters.
                     subprocess.Popen(
-                        [self._docker_exe, "rm", "-f", self._container_id],
+                        [self._docker_exe, "stop", "--time", "60", self._container_id],
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                     )
-                except Exception:
-                    pass
-            self._container_id = None
+                except Exception as e:
+                    logger.warning("Failed to stop container %s: %s", self._container_id, e)
+
+                if not self._persistent:
+                    # Also schedule removal (stop only leaves it as stopped).
+                    # Popen itself is non-blocking; no shell=True needed for background exec.
+                    try:
+                        subprocess.Popen(
+                            [self._docker_exe, "rm", "-f", self._container_id],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+                    except Exception:
+                        pass
+                self._container_id = None
 
         if not self._persistent:
             for d in (self._workspace_dir, self._home_dir):
