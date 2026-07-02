@@ -45,8 +45,8 @@ DISTRIBUTIONS = {
     "image_gen": {
         "description": "Heavy focus on image generation with vision and web support",
         "toolsets": {
-            "image_gen": 90,  # 80% chance of image generation tools
-            "vision": 90,      # 60% chance of vision tools
+            "image_gen": 90,  # 90% chance of image generation tools
+            "vision": 90,      # 90% chance of vision tools
             "web": 55,         # 40% chance of web tools
             "terminal": 45,
             "moa": 10          # 20% chance of reasoning tools
@@ -198,7 +198,7 @@ DISTRIBUTIONS = {
         "toolsets": {
             "terminal": 97,   # 97% - terminal almost always available
             "file": 97,       # 97% - file tools almost always available
-            "web": 97,        # 15% - web search/scrape for documentation
+            "web": 97,        # 97% - web search/scrape for documentation
             "browser": 75,    # 10% - browser occasionally for web interaction
             "vision": 50,      # 8% - vision analysis rarely
             "image_gen": 10    # 3% - image generation very rarely

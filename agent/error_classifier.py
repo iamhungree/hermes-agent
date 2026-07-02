@@ -1011,6 +1011,17 @@ def _classify_by_message(
             retryable=True,
         )
 
+    # Rate limit patterns must be checked before usage-limit patterns to prevent
+    # "rate limit exceeded" from being absorbed by the "limit exceeded" substring
+    # in _USAGE_LIMIT_PATTERNS and incorrectly classified as billing exhaustion.
+    if any(p in error_msg for p in _RATE_LIMIT_PATTERNS):
+        return result_fn(
+            FailoverReason.rate_limit,
+            retryable=True,
+            should_rotate_credential=True,
+            should_fallback=True,
+        )
+
     # Usage-limit patterns need the same disambiguation as 402: some providers
     # surface "usage limit" errors without an HTTP status code.  A transient
     # signal ("try again", "resets at", …) means it's a periodic quota, not
@@ -1037,15 +1048,6 @@ def _classify_by_message(
         return result_fn(
             FailoverReason.billing,
             retryable=False,
-            should_rotate_credential=True,
-            should_fallback=True,
-        )
-
-    # Rate limit patterns
-    if any(p in error_msg for p in _RATE_LIMIT_PATTERNS):
-        return result_fn(
-            FailoverReason.rate_limit,
-            retryable=True,
             should_rotate_credential=True,
             should_fallback=True,
         )
