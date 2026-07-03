@@ -115,6 +115,7 @@ def _normalize_lang(value: Any) -> str:
     base = key.split("-", 1)[0]
     if base in SUPPORTED_LANGUAGES:
         return base
+    logger.warning("Unsupported language %r — falling back to %r", value, DEFAULT_LANGUAGE)
     return DEFAULT_LANGUAGE
 
 

@@ -1100,13 +1100,13 @@ The user has requested that this compaction PRIORITISE preserving all informatio
             _status = getattr(e, "status_code", None) or getattr(getattr(e, "response", None), "status_code", None)
             _err_str = str(e).lower()
             _is_model_not_found = (
-                _status in {404, 503}
+                _status in {404}
                 or "model_not_found" in _err_str
                 or "does not exist" in _err_str
                 or "no available channel" in _err_str
             )
             _is_timeout = (
-                _status in {408, 429, 502, 504}
+                _status in {408, 429, 502, 503, 504}
                 or "timeout" in _err_str
             )
             # Non-JSON / malformed-body responses from misconfigured providers

@@ -3249,7 +3249,7 @@ def run_conversation(
                 
                 if agent.verbose_logging:
                     for tc in assistant_message.tool_calls:
-                        logging.debug(f"Tool call: {tc.function.name} with args: {tc.function.arguments[:200]}...")
+                        logging.debug(f"Tool call: {tc.function.name} with args: {str(tc.function.arguments or '')[:200]}...")
                 
                 # Validate tool call names - detect model hallucinations
                 # Repair mismatched tool names before validating
@@ -3924,11 +3924,12 @@ def run_conversation(
                     }
                     for tc in msg["tool_calls"]:
                         if not tc or not isinstance(tc, dict): continue
-                        if tc["id"] not in answered_ids:
+                        tc_id = tc.get("id")
+                        if tc_id not in answered_ids:
                             err_msg = {
                                 "role": "tool",
                                 "name": _ra().AIAgent._get_tool_call_name_static(tc),
-                                "tool_call_id": tc["id"],
+                                "tool_call_id": tc_id,
                                 "content": f"Error executing tool: {error_msg}",
                             }
                             messages.append(err_msg)

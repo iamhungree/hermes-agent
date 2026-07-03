@@ -360,7 +360,8 @@ class SessionManager:
         state = self.get_session(session_id)  # checks DB too
         if state is None:
             return None
-        state.cwd = cwd
+        with self._lock:
+            state.cwd = cwd
         _register_task_cwd(session_id, cwd)
         self._persist(state)
         return state

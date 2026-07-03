@@ -384,6 +384,10 @@ def _image_block_to_openai_part(block: ImageContentBlock) -> dict[str, Any] | No
     if data:
         url = data if data.startswith("data:") else f"data:{mime_type};base64,{data}"
     elif uri:
+        # Reject non-http(s) URIs (file://, ftp://, etc.) to prevent SSRF when
+        # the LLM provider fetches image URLs server-side during inference.
+        if urlparse(uri).scheme.lower() not in ("http", "https"):
+            return None
         url = uri
     else:
         return None
