@@ -19,9 +19,12 @@ Usage:
     all_dists = list_distributions()
 """
 
+import logging
 from typing import Dict, List, Optional
 import random
 from toolsets import validate_toolset
+
+logger = logging.getLogger(__name__)
 
 
 # Distribution definitions
@@ -45,8 +48,8 @@ DISTRIBUTIONS = {
     "image_gen": {
         "description": "Heavy focus on image generation with vision and web support",
         "toolsets": {
-            "image_gen": 90,  # 80% chance of image generation tools
-            "vision": 90,      # 60% chance of vision tools
+            "image_gen": 90,  # 90% chance of image generation tools
+            "vision": 90,      # 90% chance of vision tools
             "web": 55,         # 40% chance of web tools
             "terminal": 45,
             "moa": 10          # 20% chance of reasoning tools
@@ -270,7 +273,7 @@ def sample_toolsets_from_distribution(distribution_name: str) -> List[str]:
     for toolset_name, probability in dist["toolsets"].items():
         # Validate toolset exists
         if not validate_toolset(toolset_name):
-            print(f"⚠️  Warning: Toolset '{toolset_name}' in distribution '{distribution_name}' is not valid")
+            logger.warning("Toolset '%s' in distribution '%s' is not valid", toolset_name, distribution_name)
             continue
         
         # Roll the dice - if random value is less than probability, include this toolset

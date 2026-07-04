@@ -302,8 +302,8 @@ def _sudo_stdin_block_result(description: str) -> dict:
         "message": (
             f"BLOCKED: {description}. "
             "Do not pipe passwords to 'sudo -S' — this is a brute-force "
-            "attack vector. Set SUDO_PASSWORD in your .env file if the "
-            "agent needs passwordless sudo, or run the sudo command "
+            "attack vector. To allow this, configure passwordless sudo in "
+            "/etc/sudoers for the required command, or run the sudo command "
             "manually in your own terminal."
         ),
     }
