@@ -182,14 +182,14 @@ def run_codex_stream(agent, api_kwargs: dict, client: Any = None, on_first_delta
 
     active_client = client or agent._ensure_primary_openai_client(reason="codex_stream_direct")
     max_stream_retries = 1
-    has_tool_calls = False
-    first_delta_fired = False
     for attempt in range(max_stream_retries + 1):
         if agent._interrupt_requested:
             raise InterruptedError("Agent interrupted before Codex stream retry")
         # Reset per-attempt accumulators so a partial first-attempt
-        # stream doesn't duplicate its text parts into the assembled
-        # fallback output on retry.
+        # stream doesn't duplicate its text parts or suppress callbacks
+        # on a clean retry.
+        has_tool_calls = False
+        first_delta_fired = False
         collected_output_items: list = []
         agent._codex_streamed_text_parts: list = []
         try:

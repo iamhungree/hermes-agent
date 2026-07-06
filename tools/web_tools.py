@@ -1241,6 +1241,14 @@ async def web_crawl_tool(
             if not url.startswith(('http://', 'https://')):
                 url = f'https://{url}'
 
+            # Block URLs containing embedded secrets (exfiltration prevention).
+            from agent.redact import _PREFIX_RE
+            from urllib.parse import unquote as _unquote
+            if _PREFIX_RE.search(url) or _PREFIX_RE.search(_unquote(url)):
+                return json.dumps({"results": [{"url": url, "title": "", "content": "",
+                    "error": "Blocked: URL contains what appears to be an API key or token. "
+                             "Secrets must not be sent in URLs."}]}, ensure_ascii=False)
+
             # SSRF protection — block private/internal addresses
             if not is_safe_url(url):
                 return json.dumps({"results": [{"url": url, "title": "", "content": "",

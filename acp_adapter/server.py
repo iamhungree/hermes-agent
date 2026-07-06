@@ -717,8 +717,11 @@ class HermesACPAgent(acp.Agent):
         """Send ACP native session metadata after Hermes changes it."""
         if not self._conn:
             return
+        _db = self.session_manager._get_db()
+        if _db is None:
+            return
         try:
-            row = self.session_manager._get_db().get_session(session_id)
+            row = _db.get_session(session_id)
         except Exception:
             logger.debug("Could not read ACP session info for %s", session_id, exc_info=True)
             return

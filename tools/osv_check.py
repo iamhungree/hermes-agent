@@ -120,9 +120,12 @@ def _parse_npm_package(token: str) -> Tuple[Optional[str], Optional[str]]:
 
 
 def _parse_pypi_package(token: str) -> Tuple[Optional[str], Optional[str]]:
-    """Parse PyPI package: name==version or name[extras]==version."""
-    # Strip extras: name[extra1,extra2]==version
-    match = re.match(r"^([a-zA-Z0-9._-]+)(?:\[[^\]]*\])?(?:==(.+))?$", token)
+    """Parse PyPI package: name[extras][specifier] — only == captures a version."""
+    # Match name + optional extras + optional version specifier.
+    # Only == is captured as a version; other PEP 440 operators (>=, ~=, !=, ^=)
+    # are consumed but not captured so we still extract the correct package name
+    # instead of sending 'requests>=2.0' as a literal package name to OSV.
+    match = re.match(r"^([a-zA-Z0-9._-]+)(?:\[[^\]]*\])?(?:==(.+)|[><=!~^].+)?$", token)
     if match:
         return match.group(1), match.group(2)
     return token, None
@@ -147,8 +150,9 @@ def _query_osv(
         method="POST",
     )
 
+    _MAX_RESPONSE_BYTES = 1 * 1024 * 1024  # 1 MB cap
     with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
-        result = json.loads(resp.read())
+        result = json.loads(resp.read(_MAX_RESPONSE_BYTES))
 
     vulns = result.get("vulns", [])
     # Only malware advisories — ignore regular CVEs

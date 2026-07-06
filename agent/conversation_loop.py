@@ -2023,7 +2023,10 @@ def run_conversation(
                 # 4xx-only gate: never interpret 5xx/timeout as "server
                 # said no to images" — those are transient and must
                 # route to the normal retry path.
-                _status_ok = _err_status is None or (400 <= int(_err_status) < 500)
+                try:
+                    _status_ok = _err_status is None or (400 <= int(_err_status) < 500)
+                except (TypeError, ValueError):
+                    _status_ok = False  # non-numeric status — don't misclassify as image rejection
                 if (
                     getattr(agent, "_vision_supported", True)
                     and _looks_like_image_rejection
