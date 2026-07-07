@@ -54,4 +54,4 @@ def jittered_backoff(
     rng = random.Random(seed)
     jitter = rng.uniform(0, jitter_ratio * delay)
 
-    return delay + jitter
+    return min(delay + jitter, max_delay)

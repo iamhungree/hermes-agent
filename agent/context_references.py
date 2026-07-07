@@ -428,7 +428,10 @@ def _is_binary_file(path: Path) -> bool:
 
 
 def _build_folder_listing(path: Path, cwd: Path, limit: int = 200) -> str:
-    lines = [f"{path.relative_to(cwd)}/"]
+    try:
+        lines = [f"{path.relative_to(cwd)}/"]
+    except ValueError:
+        lines = [f"{path}/"]
     entries = _iter_visible_entries(path, cwd, limit=limit)
     for entry in entries:
         rel = entry.relative_to(cwd)
@@ -483,7 +486,7 @@ def _rg_files(path: Path, cwd: Path, limit: int) -> list[Path] | None:
             text=True,
             timeout=10,
         )
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired, ValueError):
         return None
     if result.returncode != 0:
         return None

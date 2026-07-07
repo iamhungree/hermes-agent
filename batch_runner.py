@@ -142,8 +142,10 @@ def _extract_tool_stats(messages: List[Dict[str, Any]]) -> Dict[str, Dict[str, i
         if msg["role"] == "assistant" and "tool_calls" in msg and msg["tool_calls"]:
             for tool_call in msg["tool_calls"]:
                 if not tool_call or not isinstance(tool_call, dict): continue
-                tool_name = tool_call["function"]["name"]
-                tool_call_id = tool_call["id"]
+                fn = tool_call.get("function")
+                if not isinstance(fn, dict) or "name" not in fn: continue
+                tool_name = fn["name"]
+                tool_call_id = tool_call.get("id", "")
                 
                 # Initialize stats for this tool if not exists
                 if tool_name not in tool_stats:

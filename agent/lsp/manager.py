@@ -570,6 +570,8 @@ class LSPService:
         finally:
             with self._state_lock:
                 self._spawning.pop(key, None)
+            if not spawn_future.done():
+                spawn_future.cancel()
 
     async def _shutdown_async(self) -> None:
         with self._state_lock:
