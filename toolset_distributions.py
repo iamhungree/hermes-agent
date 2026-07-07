@@ -50,9 +50,9 @@ DISTRIBUTIONS = {
         "toolsets": {
             "image_gen": 90,  # 90% chance of image generation tools
             "vision": 90,      # 90% chance of vision tools
-            "web": 55,         # 40% chance of web tools
+            "web": 55,         # 55% chance of web tools
             "terminal": 45,
-            "moa": 10          # 20% chance of reasoning tools
+            "moa": 10          # 10% chance of reasoning tools
         }
     },
     

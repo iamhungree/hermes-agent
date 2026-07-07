@@ -222,7 +222,6 @@ _CONTEXT_OVERFLOW_PATTERNS = [
     "超过最大长度",
     "上下文长度",
     # AWS Bedrock Converse API error patterns
-    "input is too long",
     "max input token",
     "input token",
     "exceeds the maximum number of input tokens",

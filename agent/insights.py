@@ -24,14 +24,11 @@ from typing import Any, Dict, List
 
 from agent.usage_pricing import (
     CanonicalUsage,
-    DEFAULT_PRICING,
+
     estimate_usage_cost,
     format_duration_compact,
     has_known_pricing,
 )
-
-_DEFAULT_PRICING = DEFAULT_PRICING
-
 
 def _has_known_pricing(model_name: str, provider: str = None, base_url: str = None) -> bool:
     """Check if a model has known pricing (vs unknown/custom endpoint)."""
