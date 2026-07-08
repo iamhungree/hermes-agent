@@ -165,6 +165,8 @@ class ProviderProfile:
 
         req = urllib.request.Request(url)
         if api_key:
+            if not url.startswith("https://"):
+                logger.warning("Sending API key over non-HTTPS URL: %s", url)
             req.add_header("Authorization", f"Bearer {api_key}")
         req.add_header("Accept", "application/json")
         # Some providers (e.g. OpenCode Zen) sit behind a WAF that blocks

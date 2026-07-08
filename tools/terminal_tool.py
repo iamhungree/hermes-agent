@@ -233,7 +233,6 @@ _sudo_password_cache_lock = threading.Lock()
 # own callback exactly like before. Gateway mode resolves approvals via
 # the per-session queue in tools.approval, not through these callbacks,
 # so it's unaffected.
-import threading
 _callback_tls = threading.local()
 
 
@@ -1971,7 +1970,7 @@ def terminal_tool(
                 # surface the result. Cheap nudge here costs ~one read for
                 # server cases (false positive) and prevents silent
                 # blindness for bounded-task cases (false negative).
-                if background and not notify_on_complete and not watch_patterns:
+                if not notify_on_complete and not watch_patterns:
                     result_data["hint"] = (
                         "background=true without notify_on_complete=true means "
                         "this process runs SILENTLY — you will not be told when "
@@ -2098,6 +2097,8 @@ def terminal_tool(
                 break
             
             # Extract output
+            if result is None:
+                return json.dumps({"output": "", "exit_code": -1, "error": "No result from execution"}, ensure_ascii=False)
             output = result.get("output", "")
             returncode = result.get("returncode", 0)
 
@@ -2171,7 +2172,6 @@ def terminal_tool(
             "output": "",
             "exit_code": -1,
             "error": f"Failed to execute command: {str(e)}",
-            "traceback": tb_str,
             "status": "error"
         }, ensure_ascii=False)
 

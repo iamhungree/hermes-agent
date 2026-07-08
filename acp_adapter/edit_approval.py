@@ -18,6 +18,8 @@ from itertools import count
 from pathlib import Path
 from typing import Any, Callable
 
+from acp.schema import AllowedOutcome
+
 logger = logging.getLogger(__name__)
 
 
@@ -279,8 +281,8 @@ def make_acp_edit_approval_requester(
             return False
         outcome = getattr(response, "outcome", None)
         return (
-            getattr(outcome, "outcome", None) == "selected"
-            and getattr(outcome, "option_id", None) == "allow_once"
+            isinstance(outcome, AllowedOutcome)
+            and outcome.option_id == "allow_once"
         )
 
     return _requester

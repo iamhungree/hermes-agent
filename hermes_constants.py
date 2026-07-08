@@ -4,10 +4,13 @@ Import-safe module with no dependencies — can be imported from anywhere
 without risk of circular imports.
 """
 
+import logging
 import os
 import sysconfig
 from contextvars import ContextVar, Token
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 _profile_fallback_warned: bool = False
@@ -251,8 +254,8 @@ def secure_parent_dir(path: Path) -> None:
         return
     try:
         os.chmod(parent, 0o700)
-    except OSError:
-        pass
+    except OSError as e:
+        logger.warning("Could not set 0o700 permissions on %s: %s", parent, e)
 
 
 def get_subprocess_home() -> str | None:
