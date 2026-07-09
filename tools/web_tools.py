@@ -519,16 +519,16 @@ Create a markdown summary that captures all key information in a well-organized,
             if extra_body:
                 call_kwargs["extra_body"] = extra_body
             response = await async_call_llm(**call_kwargs)
-            content = extract_content_or_reasoning(response)
-            if content:
-                return content
+            llm_content = extract_content_or_reasoning(response)
+            if llm_content:
+                return llm_content
             # Reasoning-only / empty response — let the retry loop handle it
             logger.warning("LLM returned empty content (attempt %d/%d), retrying", attempt + 1, max_retries)
             if attempt < max_retries - 1:
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 60)
                 continue
-            return content  # Return whatever we got after exhausting retries
+            return llm_content  # Return whatever we got after exhausting retries
         except RuntimeError:
             logger.warning("No auxiliary model available for web content processing")
             return None

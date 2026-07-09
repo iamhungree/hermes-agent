@@ -505,8 +505,12 @@ class InsightsEngine:
             d["tool_calls"] += s.get("tool_call_count") or 0
             estimate, status = _estimate_cost(s)
             d["cost"] += estimate
-            d["has_pricing"] = _has_known_pricing(model, s.get("billing_provider"), s.get("billing_base_url"))
-            d["cost_status"] = status
+            if _has_known_pricing(model, s.get("billing_provider"), s.get("billing_base_url")):
+                d["has_pricing"] = True
+            elif "has_pricing" not in d:
+                d["has_pricing"] = False
+            if d.get("cost_status") in (None, "unknown"):
+                d["cost_status"] = status
 
         result = [
             {"model": model, **data}

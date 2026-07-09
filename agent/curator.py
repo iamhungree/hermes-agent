@@ -89,7 +89,9 @@ def load_state() -> Dict[str, Any]:
             base = _default_state()
             base.update({k: v for k, v in data.items() if k in base or k.startswith("_")})
             return base
-    except (OSError, json.JSONDecodeError) as e:
+    except json.JSONDecodeError as e:
+        logger.warning("Corrupt curator state file, resetting to defaults: %s", e)
+    except OSError as e:
         logger.debug("Failed to read curator state: %s", e)
     return _default_state()
 

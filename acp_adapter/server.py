@@ -1858,7 +1858,10 @@ class HermesACPAgent(acp.Agent):
         if not steer_text:
             return "Usage: /steer <guidance>"
 
-        if state.is_running and hasattr(state.agent, "steer"):
+        with state.runtime_lock:
+            is_running = state.is_running
+
+        if is_running and hasattr(state.agent, "steer"):
             try:
                 if state.agent.steer(steer_text):
                     preview = steer_text[:80] + ("..." if len(steer_text) > 80 else "")
@@ -1870,7 +1873,7 @@ class HermesACPAgent(acp.Agent):
         with state.runtime_lock:
             state.queued_prompts.append(steer_text)
             depth = len(state.queued_prompts)
-        return f"No active turn — queued for the next turn. ({depth} queued)"
+        return f"No active turn — steer queued for the next turn. ({depth} queued)"
 
     def _cmd_queue(self, args: str, state: SessionState) -> str:
         queued_text = args.strip()
