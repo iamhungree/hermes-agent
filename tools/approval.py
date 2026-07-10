@@ -1423,7 +1423,9 @@ def check_all_command_guards(command: str, env_type: str,
             # dangerous patterns: permanent allowed
             approve_session(session_key, key)
             approve_permanent(key)
-            save_permanent_allowlist(_permanent_approved)
+            with _lock:
+                _snapshot = set(_permanent_approved)
+            save_permanent_allowlist(_snapshot)
 
     return {"approved": True, "message": None,
             "user_approved": True, "description": combined_desc}

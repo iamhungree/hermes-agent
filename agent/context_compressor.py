@@ -479,6 +479,7 @@ class ContextCompressor(ContextEngine):
         self._last_aux_model_failure_model = None
         self._last_compression_savings_pct = 100.0
         self._ineffective_compression_count = 0
+        self._summary_model_fallen_back = False
         self._summary_failure_cooldown_until = 0.0  # transient errors must not block a fresh session
 
     def update_model(

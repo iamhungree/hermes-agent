@@ -2470,13 +2470,10 @@ class BrowseShSource(SkillSource):
         md_url = self._resolve_skill_md_url(slug, item)
         if not md_url:
             return None
-        try:
-            resp = httpx.get(md_url, timeout=20, follow_redirects=True)
-            if resp.status_code != 200:
-                return None
-            content = resp.text
-        except httpx.HTTPError:
+        resp = _guarded_http_get(md_url, timeout=20)
+        if resp is None or resp.status_code != 200:
             return None
+        content = resp.text
 
         meta = self._item_to_meta(item)
         name = meta.name if meta else slug.split("/")[-1]
