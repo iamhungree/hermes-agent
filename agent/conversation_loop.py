@@ -3923,7 +3923,7 @@ def run_conversation(
                     continue
                 if msg.get("role") == "assistant" and msg.get("tool_calls"):
                     answered_ids = {
-                        m["tool_call_id"]
+                        m.get("tool_call_id")
                         for m in messages[idx + 1:]
                         if isinstance(m, dict) and m.get("role") == "tool"
                     }

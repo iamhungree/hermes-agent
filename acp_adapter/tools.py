@@ -1305,7 +1305,7 @@ def build_tool_start(
     content = [acp.tool_content(acp.text_block(args_text))]
     return acp.start_tool_call(
         tool_call_id, title, kind=kind, content=content, locations=locations,
-        raw_input=None if tool_name in _POLISHED_TOOLS else arguments,
+        raw_input=arguments,
     )
 
 
