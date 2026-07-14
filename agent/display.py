@@ -222,10 +222,10 @@ def build_tool_preview(tool_name: str, args: dict, max_len: int | None = None) -
             content = _oneline(args.get("content", ""))
             return f"+{target}: \"{content[:25]}{'...' if len(content) > 25 else ''}\""
         elif action == "replace":
-            old = _oneline(args.get("old_text") or "") or "<missing old_text>"
+            old = _oneline(args.get("old_text") or "") or "(no content)"
             return f"~{target}: \"{old[:20]}\""
         elif action == "remove":
-            old = _oneline(args.get("old_text") or "") or "<missing old_text>"
+            old = _oneline(args.get("old_text") or "") or "(no content)"
             return f"-{target}: \"{old[:20]}\""
         return action
 
@@ -982,11 +982,11 @@ def get_cute_tool_message(
             return _wrap(f"┊ 🧠 memory    +{target}: \"{_trunc(args.get('content', ''), 30)}\"  {dur}")
         elif action == "replace":
             old = args.get("old_text") or ""
-            old = old if old else "<missing old_text>"
+            old = old if old else "(no content)"
             return _wrap(f"┊ 🧠 memory    ~{target}: \"{_trunc(old, 20)}\"  {dur}")
         elif action == "remove":
             old = args.get("old_text") or ""
-            old = old if old else "<missing old_text>"
+            old = old if old else "(no content)"
             return _wrap(f"┊ 🧠 memory    -{target}: \"{_trunc(old, 20)}\"  {dur}")
         return _wrap(f"┊ 🧠 memory    {action}  {dur}")
     if tool_name == "skills_list":

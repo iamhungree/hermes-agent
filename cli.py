@@ -7887,7 +7887,7 @@ class HermesCLI:
                 print(f"  Schedule: {result['schedule']}")
                 if result.get("skills"):
                     print(f"  Skills: {', '.join(result['skills'])}")
-                print(f"  Next run: {result['next_run_at']}")
+                print(f"  Next run: {result.get('next_run_at') or 'N/A'}")
             else:
                 print(f"(x_x) Failed to create job: {result.get('error')}")
             return
@@ -7955,7 +7955,7 @@ class HermesCLI:
                 print(f"(^_^)b Paused job: {result['job']['name']} ({job_id})")
             elif action == "resume":
                 print(f"(^_^)b Resumed job: {result['job']['name']} ({job_id})")
-                print(f"  Next run: {result['job'].get('next_run_at')}")
+                print(f"  Next run: {result['job'].get('next_run_at') or 'N/A'}")
             elif action == "run":
                 print(f"(^_^)b Triggered job: {result['job']['name']} ({job_id})")
                 print("  It will run on the next scheduler tick.")
