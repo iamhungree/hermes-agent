@@ -1688,7 +1688,10 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
         # would otherwise be delivered as if it were the agent's reply and the
         # job's `last_status` set to "ok". Raise so the except handler below
         # builds the proper failure tuple. (issue #17855)
-        if result.get("failed") is True or result.get("completed") is False:
+        # `partial=True` means the response was truncated but still valid content
+        # that should be delivered — only treat `completed=False` as a failure
+        # when it is NOT accompanied by `partial=True`.
+        if result.get("failed") is True or (result.get("completed") is False and not result.get("partial")):
             _err_text = (
                 result.get("error")
                 or (result.get("final_response") or "").strip()
