@@ -957,7 +957,7 @@ class SessionStore:
     def update_session(
         self,
         session_key: str,
-        last_prompt_tokens: int = None,
+        last_prompt_tokens: Optional[int] = None,
     ) -> None:
         """Update lightweight session metadata after an interaction."""
         with self._lock:

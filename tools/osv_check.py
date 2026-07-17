@@ -82,15 +82,23 @@ def _parse_package_from_args(
     if not args:
         return None, None
 
-    # Skip flags to find the package token
+    str_args = [a for a in args if isinstance(a, str)]
+
+    # Honour npx's -p/--package flag: "npx -p @scope/pkg cmd" installs
+    # @scope/pkg, not "cmd".  Without this, the command name is scanned
+    # instead of the actual package, letting malicious packages slip through.
     package_token = None
-    for arg in args:
-        if not isinstance(arg, str):
-            continue
-        if arg.startswith("-"):
-            continue
-        package_token = arg
-        break
+    for i, arg in enumerate(str_args):
+        if arg in ("-p", "--package") and i + 1 < len(str_args):
+            package_token = str_args[i + 1]
+            break
+
+    # Fall back to the first non-flag positional argument
+    if package_token is None:
+        for arg in str_args:
+            if not arg.startswith("-"):
+                package_token = arg
+                break
 
     if not package_token:
         return None, None
@@ -114,7 +122,7 @@ def _parse_npm_package(token: str) -> Tuple[Optional[str], Optional[str]]:
     if "@" in token:
         parts = token.rsplit("@", 1)
         name = parts[0]
-        version = parts[1] if len(parts) > 1 and parts[1] != "latest" else None
+        version = parts[1] if parts[1] != "latest" else None
         return name, version
     return token, None
 

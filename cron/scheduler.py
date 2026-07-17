@@ -1937,12 +1937,20 @@ def tick(verbose: bool = True, adapters=None, loop=None) -> int:
                 for job in parallel_jobs:
                     _ctx = contextvars.copy_context()
                     _futures.append(_tick_pool.submit(_ctx.run, _process_job, job))
-                for f in concurrent.futures.as_completed(_futures, timeout=600):
-                    try:
-                        _results.append(f.result())
-                    except Exception as exc:
-                        logger.error("Parallel cron job future failed: %s", exc)
-                        _results.append(False)
+                try:
+                    for f in concurrent.futures.as_completed(_futures, timeout=600):
+                        try:
+                            _results.append(f.result())
+                        except Exception as exc:
+                            logger.error("Parallel cron job future failed: %s", exc)
+                            _results.append(False)
+                except concurrent.futures.TimeoutError:
+                    logger.error(
+                        "Parallel cron job batch timed out after 600 s; "
+                        "%d/%d result(s) collected — jobs still running will "
+                        "call mark_job_run in their own threads",
+                        len(_results), len(_futures),
+                    )
 
         # Best-effort sweep of MCP stdio subprocesses that survived their
         # session teardown during this tick.  Runs AFTER every job has

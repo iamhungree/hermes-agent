@@ -29,6 +29,7 @@ MCP client config (e.g. claude_desktop_config.json):
 
 from __future__ import annotations
 
+import collections
 import json
 import logging
 import os
@@ -210,7 +211,7 @@ class EventBridge:
     """
 
     def __init__(self):
-        self._queue: List[QueueEvent] = []
+        self._queue: collections.deque = collections.deque(maxlen=QUEUE_LIMIT)
         self._cursor = 0
         self._lock = threading.Lock()
         self._new_event = threading.Event()
@@ -323,10 +324,7 @@ class EventBridge:
         with self._lock:
             self._cursor += 1
             event.cursor = self._cursor
-            self._queue.append(event)
-            # Trim queue to limit
-            while len(self._queue) > QUEUE_LIMIT:
-                self._queue.pop(0)
+            self._queue.append(event)  # deque(maxlen=QUEUE_LIMIT) auto-trims oldest
         self._new_event.set()
 
     def _poll_loop(self):
@@ -429,7 +427,7 @@ class EventBridge:
                     session_key=session_key,
                     data={
                         "role": msg.get("role", ""),
-                        "content": content[:500],
+                        "content": content[:497] + "…" if len(content) > 500 else content,
                         "timestamp": str(msg.get("timestamp", "")),
                         "message_id": str(msg.get("id", "")),
                     },
@@ -464,7 +462,10 @@ def create_mcp_server(event_bridge: Optional[EventBridge] = None) -> "FastMCP":
         ),
     )
 
-    bridge = event_bridge or EventBridge()
+    bridge = event_bridge
+    if bridge is None:
+        bridge = EventBridge()
+        bridge.start()
 
     # -- conversations_list ------------------------------------------------
 

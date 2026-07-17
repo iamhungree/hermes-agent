@@ -223,7 +223,9 @@ class _SlashWorker:
     def _drain_stderr(self):
         for line in self.proc.stderr or []:
             if text := line.rstrip("\n"):
-                self.stderr_tail = (self.stderr_tail + [text])[-80:]
+                self.stderr_tail.append(text)
+                if len(self.stderr_tail) > 80:
+                    self.stderr_tail = self.stderr_tail[-80:]
 
     def run(self, command: str) -> str:
         if self.proc.poll() is not None:
@@ -1384,9 +1386,7 @@ def _probe_config_health(cfg: dict) -> str:
         return ""
     warnings: list[str] = []
     null_keys = sorted(k for k, v in cfg.items() if v is None)
-    if not null_keys:
-        pass
-    else:
+    if null_keys:
         keys = ", ".join(f"`{k}`" for k in null_keys)
         warnings.append(
             f"config.yaml has empty section(s): {keys}. "
