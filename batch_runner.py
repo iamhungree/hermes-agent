@@ -757,8 +757,8 @@ class BatchRunner:
                         try:
                             entry = json.loads(line.strip())
                             
-                            # Skip failed entries - we want to retry these
-                            if entry.get("failed", False):
+                            # Skip failed/partial entries - we want to retry these
+                            if entry.get("failed", False) or entry.get("partial", False):
                                 continue
                             
                             # Extract the human/user prompt from conversations

@@ -172,6 +172,8 @@ def should_auto_approve_edit(proposal: EditProposal, policy: str, cwd: str | Non
             pass
         if cwd:
             root = Path(cwd).expanduser().resolve(strict=False)
+            if root == root.parent:
+                return False
             try:
                 path.relative_to(root)
                 return True

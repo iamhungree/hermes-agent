@@ -4013,6 +4013,7 @@ def run_conversation(
         final_response is not None
         and api_call_count < agent.max_iterations
         and not failed
+        and not interrupted
     )
 
     # Save trajectory if enabled.  ``user_message`` may be a multimodal

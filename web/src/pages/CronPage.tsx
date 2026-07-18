@@ -123,9 +123,9 @@ export default function CronPage() {
     api
       .getCronJobs(selectedProfile)
       .then(setJobs)
-      .catch(() => showToast(t.common.loading, "error"))
+      .catch(() => showToast(t.status.failed, "error"))
       .finally(() => setLoading(false));
-  }, [selectedProfile, showToast, t.common.loading]);
+  }, [selectedProfile, showToast, t.status.failed]);
 
   useEffect(() => {
     api
@@ -154,7 +154,7 @@ export default function CronPage() {
         },
         createProfile,
       );
-      showToast(t.common.create + " ✓", "success");
+      showToast(t.profiles.created + " ✓", "success");
       setPrompt("");
       setSchedule("");
       setName("");
