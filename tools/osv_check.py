@@ -116,7 +116,12 @@ def _parse_npm_package(token: str) -> Tuple[Optional[str], Optional[str]]:
         # Scoped: @scope/name@version
         match = re.match(r"^(@[^/]+/[^@]+)(?:@(.+))?$", token)
         if match:
-            return match.group(1), match.group(2)
+            version = match.group(2)
+            # "latest" is a dist-tag, not a semver — OSV returns empty results
+            # for it, silently allowing packages tagged @latest to bypass checks.
+            if version == "latest":
+                version = None
+            return match.group(1), version
         return token, None
     # Unscoped: name@version
     if "@" in token:
