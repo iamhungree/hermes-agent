@@ -2066,12 +2066,17 @@ class ClawHubSource(SkillSource):
                         except ValueError:
                             logger.debug("Skipping unsafe ZIP member path: %s", info.filename)
                             continue
-                        # Only extract text-sized files (skip large binaries)
-                        if info.file_size > 500_000:
-                            logger.debug("Skipping large file in ZIP: %s (%d bytes)", name, info.file_size)
-                            continue
+                        # Only extract text-sized files (skip large binaries).
+                        # Use a bounded read — info.file_size is unverified
+                        # central-directory metadata and cannot be trusted to
+                        # cap the actual decompressed output.
+                        _MAX_ENTRY_BYTES = 500_000
                         try:
-                            raw = zf.read(info.filename)
+                            with zf.open(info.filename) as _entry_f:
+                                raw = _entry_f.read(_MAX_ENTRY_BYTES + 1)
+                            if len(raw) > _MAX_ENTRY_BYTES:
+                                logger.debug("Skipping oversized ZIP entry: %s", name)
+                                continue
                             files[name] = raw.decode("utf-8")
                         except (UnicodeDecodeError, KeyError):
                             logger.debug("Skipping non-text file in ZIP: %s", name)

@@ -204,7 +204,7 @@ DISTRIBUTIONS = {
             "web": 97,        # 97% - web search/scrape for documentation
             "browser": 75,    # 75% - browser occasionally for web interaction
             "vision": 50,      # 50% - vision analysis occasionally
-            "image_gen": 10    # 3% - image generation very rarely
+            "image_gen": 10    # 10% - image generation very rarely
         }
     },
     
