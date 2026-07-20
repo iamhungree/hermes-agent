@@ -1082,6 +1082,11 @@ The user has requested that this compaction PRIORITISE preserving all informatio
             # Redact the summary output as well — the summarizer LLM may
             # ignore prompt instructions and echo back secrets verbatim.
             summary = redact_sensitive_text(content.strip())
+            if not summary:
+                # Provider returned empty/None content — treat as failure so
+                # the abort-on-failure or fallback path runs, rather than
+                # inserting a content-less handoff that discards compressed turns.
+                return None
             # Store for iterative updates on next compaction
             self._previous_summary = summary
             self._summary_failure_cooldown_until = 0.0
