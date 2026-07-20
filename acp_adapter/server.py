@@ -1566,10 +1566,14 @@ class HermesACPAgent(acp.Agent):
                     session_id,
                     acp.update_user_message_text(next_prompt),
                 )
-            await self.prompt(
-                prompt=[TextContentBlock(type="text", text=next_prompt)],
-                session_id=session_id,
-            )
+            try:
+                await self.prompt(
+                    prompt=[TextContentBlock(type="text", text=next_prompt)],
+                    session_id=session_id,
+                )
+            except Exception:
+                logger.exception("Drain loop: prompt() failed for queued turn; continuing with remaining queue")
+                continue
 
         usage = None
         if any(result.get(key) is not None for key in ("prompt_tokens", "completion_tokens", "total_tokens")):

@@ -131,6 +131,11 @@ from cron.jobs import get_due_jobs, mark_job_run, save_job_output, advance_next_
 # locally for audit.
 SILENT_MARKER = "[SILENT]"
 
+# Sentinel for os.environ.get() calls where the variable may legitimately
+# be set to any string value, including "_UNSET_". Using object() avoids
+# false positives when TERMINAL_CWD is literally set to that string.
+_CRON_CWD_SENTINEL = object()
+
 # Backward-compatible module override used by tests and emergency monkeypatches.
 _hermes_home: Path | None = None
 
@@ -1394,7 +1399,7 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
             job_id, _job_workdir,
         )
         _job_workdir = None
-    _prior_terminal_cwd = os.environ.get("TERMINAL_CWD", "_UNSET_")
+    _prior_terminal_cwd = os.environ.get("TERMINAL_CWD", _CRON_CWD_SENTINEL)
     if _job_workdir:
         os.environ["TERMINAL_CWD"] = _job_workdir
         logger.info("Job '%s': using workdir %s", job_id, _job_workdir)
@@ -1755,7 +1760,7 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
         # only ever mutate it when the job has a workdir; see the setup block
         # at the top of run_job for the serialization guarantee.
         if _job_workdir:
-            if _prior_terminal_cwd == "_UNSET_":
+            if _prior_terminal_cwd is _CRON_CWD_SENTINEL:
                 os.environ.pop("TERMINAL_CWD", None)
             else:
                 os.environ["TERMINAL_CWD"] = _prior_terminal_cwd

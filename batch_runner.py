@@ -231,7 +231,7 @@ def _extract_reasoning_stats(messages: List[Dict[str, Any]]) -> Dict[str, int]:
         
         content = msg.get("content", "") or ""
         has_scratchpad = "<REASONING_SCRATCHPAD>" in content
-        has_native_reasoning = bool(msg.get("reasoning", "").strip()) if msg.get("reasoning") else False
+        has_native_reasoning = bool(msg.get("reasoning", "").strip())
         
         if has_scratchpad or has_native_reasoning:
             with_reasoning += 1
@@ -1219,7 +1219,7 @@ def main(
                                --prefill_messages_file=configs/prefill_opus.json
         
         # List available distributions
-        python batch_runner.py --list_distributions
+        python batch_runner.py --show_distributions
     """
     # Handle list distributions
     if show_distributions:

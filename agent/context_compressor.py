@@ -1071,6 +1071,8 @@ The user has requested that this compaction PRIORITISE preserving all informatio
             if self.summary_model:
                 call_kwargs["model"] = self.summary_model
             response = call_llm(**call_kwargs)
+            if response is None:
+                raise RuntimeError("call_llm returned None — no provider configured or silent failure")
             if not response.choices:
                 raise ValueError("LLM returned no choices for compression summary")
             content = response.choices[0].message.content
@@ -1580,6 +1582,9 @@ The user has requested that this compaction PRIORITISE preserving all informatio
             if summary_body and not self._previous_summary:
                 self._previous_summary = summary_body
             turns_to_summarize = messages[max(compress_start, summary_idx + 1):compress_end]
+
+        if not turns_to_summarize:
+            return messages
 
         if not self.quiet_mode:
             logger.info(
