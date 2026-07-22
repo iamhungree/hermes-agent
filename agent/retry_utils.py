@@ -54,4 +54,7 @@ def jittered_backoff(
     rng = random.Random(seed)
     jitter = rng.uniform(0, jitter_ratio * delay)
 
-    return min(delay + jitter, max_delay)
+    # Do not re-clamp after adding jitter: clamping delay+jitter back to
+    # max_delay would strip all randomisation once delay==max_delay, causing
+    # every concurrent caller at high attempt counts to retry simultaneously.
+    return delay + jitter

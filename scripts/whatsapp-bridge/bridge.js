@@ -586,12 +586,19 @@ app.post('/send-media', async (req, res) => {
     return res.status(400).json({ error: 'chatId and filePath are required' });
   }
 
+  // Restrict file reads to known safe cache directories and the system temp dir.
+  const ALLOWED_DIRS = [IMAGE_CACHE_DIR, DOCUMENT_CACHE_DIR, AUDIO_CACHE_DIR, tmpdir()];
+  const resolvedPath = path.resolve(filePath);
+  if (!ALLOWED_DIRS.some(dir => resolvedPath.startsWith(path.resolve(dir) + path.sep))) {
+    return res.status(403).json({ error: 'filePath must be inside a permitted cache directory' });
+  }
+
   try {
-    if (!existsSync(filePath)) {
+    if (!existsSync(resolvedPath)) {
       return res.status(404).json({ error: `File not found: ${filePath}` });
     }
 
-    const buffer = readFileSync(filePath);
+    const buffer = readFileSync(resolvedPath);
     const ext = filePath.toLowerCase().split('.').pop();
     const type = mediaType || inferMediaType(ext);
     let msgPayload;

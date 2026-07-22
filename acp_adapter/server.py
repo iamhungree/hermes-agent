@@ -1324,19 +1324,28 @@ class HermesACPAgent(acp.Agent):
         # still running, queue it instead of racing two AIAgent loops against
         # the same state.history. /steer and /queue are handled above and can
         # land immediately.
+        # Keep state mutations inside the lock; perform async I/O outside it.
+        # Awaiting while holding a threading.Lock suspends the coroutine without
+        # releasing the lock, so any coroutine (e.g. cancel()) that subsequently
+        # tries to acquire the same lock will block the event-loop thread →
+        # deadlock requiring a process kill.
+        _queued_depth = -1
         with state.runtime_lock:
             if state.is_running:
                 queued_text = user_text or "[Image attachment]"
                 state.queued_prompts.append(queued_text)
-                depth = len(state.queued_prompts)
-                if self._conn:
-                    update = acp.update_agent_message_text(
-                        f"Queued for the next turn. ({depth} queued)"
-                    )
-                    await self._conn.session_update(session_id, update)
-                return PromptResponse(stop_reason="end_turn")
-            state.is_running = True
-            state.current_prompt_text = user_text or "[Image attachment]"
+                _queued_depth = len(state.queued_prompts)
+            else:
+                state.is_running = True
+                state.current_prompt_text = user_text or "[Image attachment]"
+
+        if _queued_depth >= 0:
+            if self._conn:
+                update = acp.update_agent_message_text(
+                    f"Queued for the next turn. ({_queued_depth} queued)"
+                )
+                await self._conn.session_update(session_id, update)
+            return PromptResponse(stop_reason="end_turn")
 
         logger.info("Prompt on session %s: %s", session_id, user_text[:100])
 
