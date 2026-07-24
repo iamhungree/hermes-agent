@@ -66,6 +66,7 @@ Usage:
     content = skill_view("axolotl", "references/dataset-formats.md")
 """
 
+import glob
 import json
 import logging
 
@@ -1004,7 +1005,7 @@ def skill_view(
                     _record(found_skill_md.parent, found_skill_md)
 
             # Strategy 3: legacy flat <name>.md files anywhere under the dir.
-            for found_md in search_dir.rglob(f"{name}.md"):
+            for found_md in search_dir.rglob(f"{glob.escape(name)}.md"):
                 if found_md.name != "SKILL.md":
                     _record(None, found_md)
 

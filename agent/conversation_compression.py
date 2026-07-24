@@ -372,6 +372,7 @@ def compress_context(
     new_system_prompt = agent._build_system_prompt(system_message)
     agent._cached_system_prompt = new_system_prompt
 
+    old_session_id = None
     if agent._session_db:
         try:
             # Propagate title to the new session with auto-numbering
@@ -415,7 +416,7 @@ def compress_context(
     # rollover instead of re-initializing fresh per-session state.
     # See hermes-lcm#68. Built-in ContextCompressor ignores kwargs.
     try:
-        _old_sid = locals().get("old_session_id")
+        _old_sid = old_session_id
         if _old_sid and hasattr(agent.context_compressor, "on_session_start"):
             agent.context_compressor.on_session_start(
                 agent.session_id or "",
@@ -431,7 +432,7 @@ def compress_context(
     # the logical conversation continues; only the id and DB row rolled
     # over. See #6672.
     try:
-        _old_sid = locals().get("old_session_id")
+        _old_sid = old_session_id
         if _old_sid and agent._memory_manager:
             agent._memory_manager.on_session_switch(
                 agent.session_id or "",

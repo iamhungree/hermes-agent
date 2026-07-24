@@ -844,7 +844,16 @@ class ContextCompressor(ContextEngine):
         parts = []
         for msg in turns:
             role = msg.get("role", "unknown")
-            content = redact_sensitive_text(msg.get("content") or "")
+            raw = msg.get("content")
+            if isinstance(raw, list):
+                # Multimodal content: extract text blocks only; skip image/media
+                text_parts = [
+                    block.get("text", "") for block in raw
+                    if isinstance(block, dict) and block.get("type") == "text"
+                ]
+                content = redact_sensitive_text(" ".join(filter(None, text_parts)))
+            else:
+                content = redact_sensitive_text(raw or "")
 
             # Tool results: keep enough content for the summarizer
             if role == "tool":

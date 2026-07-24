@@ -738,7 +738,7 @@ class InsightsEngine:
         period_label = f"Last {days} days"
         if src_filter:
             period_label += f" ({src_filter})"
-        padding = 58 - len(period_label) - 2
+        padding = max(0, 58 - len(period_label) - 2)
         left_pad = padding // 2
         right_pad = padding - left_pad
         lines.append(f"  ║{' ' * left_pad} {period_label} {' ' * right_pad}║")
