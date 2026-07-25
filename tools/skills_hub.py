@@ -2000,7 +2000,16 @@ class ClawHubSource(SkillSource):
         file_list = version_data.get("files")
 
         if isinstance(file_list, dict):
-            return {k: v for k, v in file_list.items() if isinstance(v, str)}
+            for k, v in file_list.items():
+                if not isinstance(k, str) or not isinstance(v, str):
+                    continue
+                try:
+                    safe_k = _validate_bundle_rel_path(k)
+                except ValueError:
+                    logger.debug("Skipping unsafe API file path: %s", k)
+                    continue
+                files[safe_k] = v
+            return files
 
         if not isinstance(file_list, list):
             return files
@@ -2013,16 +2022,22 @@ class ClawHubSource(SkillSource):
             if not fname or not isinstance(fname, str):
                 continue
 
+            try:
+                safe_fname = _validate_bundle_rel_path(fname)
+            except ValueError:
+                logger.debug("Skipping unsafe API file path: %s", fname)
+                continue
+
             inline_content = file_meta.get("content")
             if isinstance(inline_content, str):
-                files[fname] = inline_content
+                files[safe_fname] = inline_content
                 continue
 
             raw_url = file_meta.get("rawUrl") or file_meta.get("downloadUrl") or file_meta.get("url")
             if isinstance(raw_url, str) and raw_url.startswith("http"):
                 content = self._fetch_text(raw_url)
                 if content is not None:
-                    files[fname] = content
+                    files[safe_fname] = content
 
         return files
 

@@ -509,11 +509,27 @@ def _extract_usage(response: Any) -> PluginLlmUsage:
         except (TypeError, ValueError):
             return 0
 
-    usage.input_tokens = _g("prompt_tokens") or _g("input_tokens")
-    usage.output_tokens = _g("completion_tokens") or _g("output_tokens")
+    def _g_raw(name: str):
+        v = getattr(raw, name, None)
+        if v is None and isinstance(raw, dict):
+            v = raw.get(name)
+        return v
+
+    def _first(*names: str) -> int:
+        for n in names:
+            v = _g_raw(n)
+            if v is not None:
+                try:
+                    return int(v)
+                except (TypeError, ValueError):
+                    pass
+        return 0
+
+    usage.input_tokens = _first("prompt_tokens", "input_tokens")
+    usage.output_tokens = _first("completion_tokens", "output_tokens")
     usage.total_tokens = _g("total_tokens") or (usage.input_tokens + usage.output_tokens)
-    usage.cache_read_tokens = _g("cache_read_input_tokens") or _g("cache_read_tokens")
-    usage.cache_write_tokens = _g("cache_creation_input_tokens") or _g("cache_write_tokens")
+    usage.cache_read_tokens = _first("cache_read_input_tokens", "cache_read_tokens")
+    usage.cache_write_tokens = _first("cache_creation_input_tokens", "cache_write_tokens")
     return usage
 
 
