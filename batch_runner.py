@@ -231,7 +231,8 @@ def _extract_reasoning_stats(messages: List[Dict[str, Any]]) -> Dict[str, int]:
         
         content = msg.get("content", "") or ""
         has_scratchpad = "<REASONING_SCRATCHPAD>" in content
-        has_native_reasoning = bool(msg.get("reasoning", "").strip())
+        _reasoning = msg.get("reasoning")
+        has_native_reasoning = bool(_reasoning.strip() if isinstance(_reasoning, str) else _reasoning)
         
         if has_scratchpad or has_native_reasoning:
             with_reasoning += 1

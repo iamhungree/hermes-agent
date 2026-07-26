@@ -181,9 +181,10 @@ class ProviderProfile:
         for k, v in self.default_headers.items():
             req.add_header(k, v)
 
+        _MAX_MODELS_RESPONSE_BYTES = 4 * 1024 * 1024  # 4 MB cap
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                data = json.loads(resp.read().decode())
+                data = json.loads(resp.read(_MAX_MODELS_RESPONSE_BYTES).decode())
             items = data if isinstance(data, list) else data.get("data", [])
             return [m["id"] for m in items if isinstance(m, dict) and "id" in m]
         except Exception as exc:
