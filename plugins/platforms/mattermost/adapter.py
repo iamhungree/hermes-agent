@@ -55,7 +55,7 @@ def check_mattermost_requirements() -> bool:
     token = os.getenv("MATTERMOST_TOKEN", "")
     url = os.getenv("MATTERMOST_URL", "")
     if not token:
-        logger.debug("Mattermost: MATTERMOST_TOKEN not set")
+        logger.warning("Mattermost: MATTERMOST_TOKEN not set")
         return False
     if not url:
         logger.warning("Mattermost: MATTERMOST_URL not set")

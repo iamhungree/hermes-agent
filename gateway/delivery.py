@@ -97,15 +97,15 @@ class DeliveryTarget:
                 platform = Platform(platform_str)
                 return cls(platform=platform, chat_id=chat_id, thread_id=thread_id, is_explicit=True)
             except ValueError:
-                # Unknown platform, treat as local
+                logger.warning("Unknown delivery platform %r — falling back to local", platform_str)
                 return cls(platform=Platform.LOCAL)
-        
+
         # Just a platform name (use home channel)
         try:
             platform = Platform(target_lower)
             return cls(platform=platform)
         except ValueError:
-            # Unknown platform, treat as local
+            logger.warning("Unknown delivery platform %r — falling back to local", target_lower)
             return cls(platform=Platform.LOCAL)
     
     def to_string(self) -> str:

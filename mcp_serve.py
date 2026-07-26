@@ -376,6 +376,21 @@ class EventBridge:
         self._state_db_mtime = db_mtime
         entries = self._cached_sessions_index
 
+        def _ts_float(ts) -> float:
+            if isinstance(ts, (int, float)):
+                return float(ts)
+            if isinstance(ts, str) and ts:
+                try:
+                    return float(ts)
+                except ValueError:
+                    # ISO string — parse to epoch
+                    try:
+                        from datetime import datetime
+                        return datetime.fromisoformat(ts).timestamp()
+                    except Exception:
+                        return 0.0
+            return 0.0
+
         for session_key, entry in entries.items():
             session_id = entry.get("session_id", "")
             if not session_id:
@@ -390,22 +405,6 @@ class EventBridge:
 
             if not messages:
                 continue
-
-            # Normalize timestamps to float for comparison
-            def _ts_float(ts) -> float:
-                if isinstance(ts, (int, float)):
-                    return float(ts)
-                if isinstance(ts, str) and ts:
-                    try:
-                        return float(ts)
-                    except ValueError:
-                        # ISO string — parse to epoch
-                        try:
-                            from datetime import datetime
-                            return datetime.fromisoformat(ts).timestamp()
-                        except Exception:
-                            return 0.0
-                return 0.0
 
             # Find messages newer than our last seen timestamp
             new_messages = []
