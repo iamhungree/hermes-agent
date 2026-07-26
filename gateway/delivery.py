@@ -74,10 +74,25 @@ class DeliveryTarget:
         # Check for platform:chat_id or platform:chat_id:thread_id format
         # Use the original case for chat_id/thread_id to preserve case-sensitive IDs
         if ":" in target_stripped:
-            parts = target_stripped.split(":", 2)
-            platform_str = parts[0].lower()  # Platform names are case-insensitive
-            chat_id = parts[1] if len(parts) > 1 else None
-            thread_id = parts[2] if len(parts) > 2 else None
+            platform_str = target_stripped.split(":", 1)[0].lower()
+            rest = target_stripped[len(platform_str) + 1:]
+            # Matrix room IDs always start with "!" and contain exactly one internal
+            # colon ("!localpart:homeserver"), so the generic split(":", 2) would
+            # truncate the room ID and misinterpret the homeserver domain as a
+            # thread_id.  Detect Matrix IDs by their "!" prefix and use ":$" as the
+            # thread-event separator instead (Matrix event IDs start with "$").
+            if platform_str == "matrix" and rest.startswith("!"):
+                dollar_idx = rest.find(":$")
+                if dollar_idx >= 0:
+                    chat_id = rest[:dollar_idx]
+                    thread_id = rest[dollar_idx + 1:]
+                else:
+                    chat_id = rest
+                    thread_id = None
+            else:
+                sub = rest.split(":", 1)
+                chat_id = sub[0] if sub[0] else None
+                thread_id = sub[1] if len(sub) > 1 else None
             try:
                 platform = Platform(platform_str)
                 return cls(platform=platform, chat_id=chat_id, thread_id=thread_id, is_explicit=True)

@@ -1345,7 +1345,9 @@ def check_all_command_guards(command: str, env_type: str,
                 elif choice == "always":
                     approve_session(session_key, key)
                     approve_permanent(key)
-                    save_permanent_allowlist(_permanent_approved)
+                    with _lock:
+                        _snapshot = set(_permanent_approved)
+                    save_permanent_allowlist(_snapshot)
                 # choice == "once": no persistence — command allowed this
                 # single time only, matching the CLI's behavior.
 
