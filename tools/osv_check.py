@@ -117,9 +117,11 @@ def _parse_npm_package(token: str) -> Tuple[Optional[str], Optional[str]]:
         match = re.match(r"^(@[^/]+/[^@]+)(?:@(.+))?$", token)
         if match:
             version = match.group(2)
-            # "latest" is a dist-tag, not a semver — OSV returns empty results
-            # for it, silently allowing packages tagged @latest to bypass checks.
-            if version == "latest":
+            # Dist-tags (latest, next, beta, canary, …) are not semver — OSV
+            # returns zero advisories for them, silently bypassing the check.
+            # Any version not starting with a digit is a dist-tag; normalise to
+            # None so we query without a version constraint instead.
+            if version and not re.match(r'^\d', version):
                 version = None
             return match.group(1), version
         return token, None
@@ -127,7 +129,7 @@ def _parse_npm_package(token: str) -> Tuple[Optional[str], Optional[str]]:
     if "@" in token:
         parts = token.rsplit("@", 1)
         name = parts[0]
-        version = parts[1] if parts[1] != "latest" else None
+        version = parts[1] if re.match(r'^\d', parts[1]) else None
         return name, version
     return token, None
 

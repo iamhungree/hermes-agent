@@ -233,9 +233,8 @@ class DeliveryRouter:
     def _save_full_output(self, content: str, job_id: str) -> Path:
         """Save full cron output to disk and return the file path."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        out_dir = get_hermes_home() / "cron" / "output"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        path = out_dir / f"{job_id}_{timestamp}.txt"
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        path = self.output_dir / f"{job_id}_{timestamp}.txt"
         path.write_text(content, encoding="utf-8")
         return path
 
@@ -261,7 +260,7 @@ class DeliveryRouter:
             logger.info("Cron output truncated (%d chars) — full output: %s", len(content), saved_path)
             content = (
                 content[:TRUNCATED_VISIBLE]
-                + f"\n\n... [truncated, full output saved to {saved_path}]"
+                + "\n\n... [truncated — message too long for this platform]"
             )
         
         send_metadata = dict(metadata or {})

@@ -170,7 +170,7 @@ def _extract_attachments(msg: dict) -> List[dict]:
                 url = part.get("url", part.get("source", {}).get("url", ""))
                 if url:
                     attachments.append({"type": "image", "url": url})
-            elif ptype not in {"text",}:
+            elif ptype not in {"text"}:
                 # Unknown non-text content type
                 attachments.append({"type": ptype, "data": part})
 
@@ -276,6 +276,9 @@ class EventBridge:
         deadline = time.monotonic() + (timeout_ms / 1000.0)
 
         while time.monotonic() < deadline:
+            # Clear before the locked check so a signal fired between the
+            # unlock and wait() is not lost (classic lost-wakeup prevention).
+            self._new_event.clear()
             with self._lock:
                 for e in self._queue:
                     if e.cursor > after_cursor and (
@@ -289,7 +292,6 @@ class EventBridge:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break
-            self._new_event.clear()
             self._new_event.wait(timeout=min(remaining, POLL_INTERVAL))
 
         return None
@@ -597,10 +599,11 @@ def create_mcp_server(event_bridge: Optional[EventBridge] = None) -> "FastMCP":
             if role in {"user", "assistant"}:
                 content = _extract_message_content(msg)
                 if content:
+                    truncated = len(content) > 2000
                     filtered.append({
                         "id": str(msg.get("id", "")),
                         "role": role,
-                        "content": content[:2000],
+                        "content": content[:2000] + (" …[truncated]" if truncated else ""),
                         "timestamp": msg.get("timestamp", ""),
                     })
 
