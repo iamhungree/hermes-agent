@@ -144,7 +144,7 @@ def check_compression_model_feasibility(agent: Any) -> None:
             )
 
         threshold = agent.context_compressor.threshold_tokens
-        if aux_context < threshold:
+        if aux_context is not None and aux_context < threshold:
             # Auto-correct: lower the live session threshold so
             # compression actually works this session.  The hard floor
             # above guarantees aux_context >= MINIMUM_CONTEXT_LENGTH,
@@ -549,6 +549,10 @@ def try_shrink_image_parts_in_messages(api_messages: list) -> bool:
                     max_base64_bytes=target_bytes,
                 )
             finally:
+                try:
+                    tmp.close()
+                except Exception:
+                    pass
                 try:
                     Path(tmp.name).unlink(missing_ok=True)
                 except Exception:

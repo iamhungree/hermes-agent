@@ -842,12 +842,18 @@ class WebhookAdapter(BasePlatformAdapter):
             )
 
         try:
+            pr_number_int = int(pr_number)
+        except (ValueError, TypeError):
+            logger.error("[webhook] github_comment delivery: pr_number is not a valid integer: %r", pr_number)
+            return SendResult(success=False, error="pr_number must be an integer")
+
+        try:
             result = subprocess.run(
                 [
                     "gh",
                     "pr",
                     "comment",
-                    str(pr_number),
+                    str(pr_number_int),
                     "--repo",
                     repo,
                     "--body",

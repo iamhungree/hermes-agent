@@ -444,8 +444,6 @@ def run_codex_create_stream_fallback(agent, api_kwargs: dict, client: Any = None
             except Exception:
                 pass
 
-    if terminal_response is not None:
-        return terminal_response
     raise RuntimeError("Responses create(stream=True) fallback did not emit a terminal response.")
 
 

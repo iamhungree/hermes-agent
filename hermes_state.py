@@ -1647,6 +1647,21 @@ class SessionDB:
                 except (json.JSONDecodeError, TypeError):
                     logger.warning("Failed to deserialize tool_calls in get_messages, falling back to []")
                     msg["tool_calls"] = []
+            if msg.get("reasoning_details"):
+                try:
+                    msg["reasoning_details"] = json.loads(msg["reasoning_details"])
+                except (json.JSONDecodeError, TypeError):
+                    msg["reasoning_details"] = None
+            if msg.get("codex_reasoning_items"):
+                try:
+                    msg["codex_reasoning_items"] = json.loads(msg["codex_reasoning_items"])
+                except (json.JSONDecodeError, TypeError):
+                    msg["codex_reasoning_items"] = None
+            if msg.get("codex_message_items"):
+                try:
+                    msg["codex_message_items"] = json.loads(msg["codex_message_items"])
+                except (json.JSONDecodeError, TypeError):
+                    msg["codex_message_items"] = None
             result.append(msg)
         return result
 
