@@ -417,9 +417,13 @@ def _build_structured_messages(
             user_parts.append({"type": "text", "text": norm["text"]})
         elif norm["type"] == "image":
             if norm.get("url"):
+                from tools.url_safety import is_safe_url
+                img_url = norm["url"]
+                if not is_safe_url(img_url):
+                    raise ValueError(f"plugin_llm: image URL blocked by safety check: {img_url!r}")
                 user_parts.append({
                     "type": "image_url",
-                    "image_url": {"url": norm["url"]},
+                    "image_url": {"url": img_url},
                 })
             else:
                 data = norm.get("data") or b""

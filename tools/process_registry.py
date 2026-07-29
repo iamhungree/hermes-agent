@@ -757,8 +757,9 @@ class ProcessRegistry:
                 session.process.wait(timeout=5)
             except Exception as e:
                 logger.debug("Process wait timed out or failed: %s", e)
-            session.exited = True
-            session.exit_code = session.process.returncode
+            with session._lock:
+                session.exited = True
+                session.exit_code = session.process.returncode
             self._move_to_finished(session)
 
     def _env_poller_loop(

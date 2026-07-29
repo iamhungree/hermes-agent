@@ -319,4 +319,4 @@ def cron_command(args):
 
     print(f"Unknown cron command: {subcmd}")
     print("Usage: hermes cron [list|create|edit|pause|resume|run|remove|status|tick]")
-    sys.exit(1)
+    return 1

@@ -356,10 +356,6 @@ class EventBridge:
         except OSError:
             sj_mtime = 0.0
 
-        if sj_mtime != self._sessions_json_mtime:
-            self._sessions_json_mtime = sj_mtime
-            self._cached_sessions_index = _load_sessions_index()
-
         # Check if state.db has changed
         try:
             from hermes_constants import get_hermes_home
@@ -374,6 +370,10 @@ class EventBridge:
 
         if db_mtime == self._state_db_mtime and sj_mtime == self._sessions_json_mtime:
             return  # Nothing changed since last poll — skip entirely
+
+        if sj_mtime != self._sessions_json_mtime:
+            self._sessions_json_mtime = sj_mtime
+            self._cached_sessions_index = _load_sessions_index()
 
         self._state_db_mtime = db_mtime
         entries = self._cached_sessions_index

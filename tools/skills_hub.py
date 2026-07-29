@@ -618,7 +618,7 @@ class GitHubSource(SkillSource):
             else:
                 logger.debug("Skipped file (fetch failed): %s/%s", repo, item_path)
 
-        return files if files else None
+        return files
 
     def _download_directory_recursive(self, repo: str, path: str) -> Dict[str, str]:
         """Recursively download via Contents API (fallback)."""

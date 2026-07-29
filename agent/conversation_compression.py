@@ -432,7 +432,6 @@ def compress_context(
     # the logical conversation continues; only the id and DB row rolled
     # over. See #6672.
     try:
-        _old_sid = old_session_id
         if _old_sid and agent._memory_manager:
             agent._memory_manager.on_session_switch(
                 agent.session_id or "",
