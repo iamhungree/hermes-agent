@@ -6148,7 +6148,6 @@ class HermesCLI:
         try:
             sessions = self._session_db.list_sessions_rich(
                 source="cli",
-                exclude_sources=["tool"],
                 limit=limit,
             )
         except Exception:
@@ -7900,7 +7899,7 @@ class HermesCLI:
             job_id = positionals[0]
             existing = get_job(job_id)
             if not existing:
-                print(f"(._.) Job not found: {job_id}")
+                print(f"(._.) Job not found: {job_id}  (run /cron list to see available job IDs)")
                 return
 
             final_skills = None
