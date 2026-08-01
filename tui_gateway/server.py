@@ -729,7 +729,7 @@ def _enable_gateway_prompts() -> None:
 
 
 def _block(event: str, sid: str, payload: dict, timeout: int = 300) -> str:
-    rid = uuid.uuid4().hex[:8]
+    rid = uuid.uuid4().hex
     ev = threading.Event()
     _pending[rid] = (sid, ev)
     payload["request_id"] = rid
