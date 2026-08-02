@@ -24,7 +24,6 @@ from typing import Any, Dict, List
 
 from agent.usage_pricing import (
     CanonicalUsage,
-
     estimate_usage_cost,
     format_duration_compact,
     has_known_pricing,

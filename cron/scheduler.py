@@ -1940,25 +1940,33 @@ def tick(verbose: bool = True, adapters=None, loop=None) -> int:
 
         # Parallel pass for the rest — same behaviour as before.
         if parallel_jobs:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=_max_workers) as _tick_pool:
-                _futures = []
-                for job in parallel_jobs:
-                    _ctx = contextvars.copy_context()
-                    _futures.append(_tick_pool.submit(_ctx.run, _process_job, job))
-                try:
-                    for f in concurrent.futures.as_completed(_futures, timeout=600):
-                        try:
-                            _results.append(f.result())
-                        except Exception as exc:
-                            logger.error("Parallel cron job future failed: %s", exc)
-                            _results.append(False)
-                except concurrent.futures.TimeoutError:
-                    logger.error(
-                        "Parallel cron job batch timed out after 600 s; "
-                        "%d/%d result(s) collected — jobs still running will "
-                        "call mark_job_run in their own threads",
-                        len(_results), len(_futures),
-                    )
+            # Do NOT use `with ThreadPoolExecutor(...) as pool:` here.
+            # The context manager calls shutdown(wait=True) on __exit__, which
+            # blocks until all submitted futures complete — even when we catch
+            # TimeoutError below and want to let still-running jobs finish in
+            # the background.  Manual shutdown(wait=False) preserves that intent.
+            _tick_pool = concurrent.futures.ThreadPoolExecutor(max_workers=_max_workers)
+            _futures = []
+            for job in parallel_jobs:
+                _ctx = contextvars.copy_context()
+                _futures.append(_tick_pool.submit(_ctx.run, _process_job, job))
+            try:
+                for f in concurrent.futures.as_completed(_futures, timeout=600):
+                    try:
+                        _results.append(f.result())
+                    except Exception as exc:
+                        logger.error("Parallel cron job future failed: %s", exc)
+                        _results.append(False)
+            except concurrent.futures.TimeoutError:
+                logger.error(
+                    "Parallel cron job batch timed out after 600 s; "
+                    "%d/%d result(s) collected — jobs still running will "
+                    "call mark_job_run in their own threads",
+                    len(_results), len(_futures),
+                )
+            # Futures have all completed on the normal path; on the timeout
+            # path, cancel_futures=False lets still-running jobs finish.
+            _tick_pool.shutdown(wait=False, cancel_futures=False)
 
         # Best-effort sweep of MCP stdio subprocesses that survived their
         # session teardown during this tick.  Runs AFTER every job has
