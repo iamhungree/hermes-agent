@@ -2054,7 +2054,7 @@ class ClawHubSource(SkillSource):
                     f"{self.BASE_URL}/download",
                     params={"slug": slug, "version": version},
                     timeout=30,
-                    follow_redirects=True,
+                    follow_redirects=False,
                 )
                 if resp.status_code == 429:
                     try:
