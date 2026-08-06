@@ -841,15 +841,23 @@ def remove_job(job_id: str) -> bool:
     if not job:
         return False
     canonical_id = job["id"]
+    safe_id = Path(canonical_id).name
     jobs = load_jobs()
     original_len = len(jobs)
     jobs = [j for j in jobs if j["id"] != canonical_id]
     if len(jobs) < original_len:
         save_jobs(jobs)
-        # Clean up output directory to prevent orphaned dirs accumulating
-        job_output_dir = OUTPUT_DIR / canonical_id
-        if job_output_dir.exists():
-            shutil.rmtree(job_output_dir)
+        # Clean up output directory to prevent orphaned dirs accumulating.
+        # Guard against path traversal via hand-edited jobs.json entries.
+        if safe_id and safe_id == canonical_id:
+            job_output_dir = OUTPUT_DIR / safe_id
+            if job_output_dir.exists():
+                shutil.rmtree(job_output_dir)
+        else:
+            logger.warning(
+                "[cron] remove_job: job id %r contains path separators, skipping output dir removal",
+                canonical_id,
+            )
         return True
     return False
 
@@ -1061,7 +1069,11 @@ def _get_due_jobs_locked() -> List[Dict[str, Any]]:
 def save_job_output(job_id: str, output: str):
     """Save job output to file."""
     ensure_dirs()
-    job_output_dir = OUTPUT_DIR / job_id
+    safe_id = Path(job_id).name
+    if not safe_id or safe_id != job_id:
+        logger.warning("[cron] save_job_output: job_id %r is not a safe path component, skipping", job_id)
+        return None
+    job_output_dir = OUTPUT_DIR / safe_id
     job_output_dir.mkdir(parents=True, exist_ok=True)
     _secure_dir(job_output_dir)
     
