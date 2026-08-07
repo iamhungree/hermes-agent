@@ -416,14 +416,13 @@ class LSPService:
         except Exception:  # noqa: BLE001
             per_server_root = ws_root
         key = (srv.server_id, per_server_root)
-        already_broken = key in self._broken
-        self._broken.add(key)
-
         # Kill any client we managed to spawn before the timeout.  The
         # cancelled future never reached the broken-set add inside
         # ``_get_or_spawn`` so the client may still be hanging in
         # ``_clients`` with a half-initialized state.
         with self._state_lock:
+            already_broken = key in self._broken
+            self._broken.add(key)
             client = self._clients.pop(key, None)
         if client is not None:
             try:

@@ -664,6 +664,7 @@ class InsightsEngine:
         sessions_with_duration = [
             s for s in sessions
             if s.get("started_at") and s.get("ended_at")
+            and s["ended_at"] > s["started_at"]
         ]
         if sessions_with_duration:
             longest = max(

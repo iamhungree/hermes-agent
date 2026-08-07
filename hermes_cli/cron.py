@@ -317,6 +317,6 @@ def cron_command(args):
     if subcmd in {"remove", "rm", "delete"}:
         return _job_action("remove", args.job_id, "Removed")
 
-    print(f"Unknown cron command: {subcmd}")
-    print("Usage: hermes cron [list|create|edit|pause|resume|run|remove|status|tick]")
+    print(f"Unknown cron command: {subcmd}", file=sys.stderr)
+    print("Usage: hermes cron [list|create|edit|pause|resume|run|remove|status|tick]", file=sys.stderr)
     return 1
