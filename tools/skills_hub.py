@@ -2072,6 +2072,11 @@ class ClawHubSource(SkillSource):
                     logger.debug("ClawHub ZIP download for %s v%s returned %s", slug, version, resp.status_code)
                     return files
 
+                # Only extract text-sized files (skip large binaries).
+                # Use a bounded read — info.file_size is unverified
+                # central-directory metadata and cannot be trusted to
+                # cap the actual decompressed output.
+                _MAX_ENTRY_BYTES = 500_000
                 with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
                     for info in zf.infolist():
                         if info.is_dir():
@@ -2081,11 +2086,6 @@ class ClawHubSource(SkillSource):
                         except ValueError:
                             logger.debug("Skipping unsafe ZIP member path: %s", info.filename)
                             continue
-                        # Only extract text-sized files (skip large binaries).
-                        # Use a bounded read — info.file_size is unverified
-                        # central-directory metadata and cannot be trusted to
-                        # cap the actual decompressed output.
-                        _MAX_ENTRY_BYTES = 500_000
                         try:
                             with zf.open(info.filename) as _entry_f:
                                 raw = _entry_f.read(_MAX_ENTRY_BYTES + 1)

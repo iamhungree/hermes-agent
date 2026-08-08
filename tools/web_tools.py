@@ -246,8 +246,6 @@ def _ddgs_package_importable() -> bool:
         return False
 
 # ─── Firecrawl Client ────────────────────────────────────────────────────────
-
-# ─── Firecrawl Client ────────────────────────────────────────────────────────
 # After PR #25182, the firecrawl client, lazy SDK proxy, dual-auth config
 # resolution, response normalizers, and check_firecrawl_api_key() all live
 # in plugins.web.firecrawl.provider and are re-exported at the top of this
@@ -528,7 +526,7 @@ Create a markdown summary that captures all key information in a well-organized,
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 60)
                 continue
-            return llm_content  # Return whatever we got after exhausting retries
+            return None  # Exhausted retries with empty LLM response; let caller fall back
         except RuntimeError:
             logger.warning("No auxiliary model available for web content processing")
             return None

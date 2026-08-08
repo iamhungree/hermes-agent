@@ -117,16 +117,19 @@ def _resource_display_name(uri: str, name: str | None = None, title: str | None 
     return Path(unquote(candidate)).name or uri or "resource"
 
 
+def _mime_base(mime_type: str | None) -> str:
+    return (mime_type or "").split(";", 1)[0].strip().lower()
+
+
 def _is_text_resource(mime_type: str | None) -> bool:
-    mime = (mime_type or "").split(";", 1)[0].strip().lower()
+    mime = _mime_base(mime_type)
     if not mime:
         return False
     return mime.startswith(_TEXT_RESOURCE_MIME_PREFIXES) or mime in _TEXT_RESOURCE_MIME_TYPES
 
 
 def _is_image_resource(mime_type: str | None) -> bool:
-    mime = (mime_type or "").split(";", 1)[0].strip().lower()
-    return mime.startswith("image/")
+    return _mime_base(mime_type).startswith("image/")
 
 
 def _guess_image_mime_from_path(path: Path) -> str | None:
