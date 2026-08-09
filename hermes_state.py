@@ -392,20 +392,22 @@ class SessionDB:
         last_err: Optional[Exception] = None
         for attempt in range(self._WRITE_MAX_RETRIES):
             try:
+                _do_checkpoint = False
                 with self._lock:
                     self._conn.execute("BEGIN IMMEDIATE")
                     try:
                         result = fn(self._conn)
                         self._conn.commit()
+                        self._write_count += 1
+                        _do_checkpoint = (self._write_count % self._CHECKPOINT_EVERY_N_WRITES == 0)
                     except BaseException:
                         try:
                             self._conn.rollback()
                         except Exception:
                             pass
                         raise
-                # Success — periodic best-effort checkpoint.
-                self._write_count += 1
-                if self._write_count % self._CHECKPOINT_EVERY_N_WRITES == 0:
+                # Success — periodic best-effort checkpoint (outside lock, can be slow).
+                if _do_checkpoint:
                     self._try_wal_checkpoint()
                 return result
             except sqlite3.OperationalError as exc:

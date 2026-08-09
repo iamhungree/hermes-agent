@@ -111,7 +111,7 @@ export default function SkillsPage() {
         setSkills(s);
         setToolsets(tsets);
       })
-      .catch(() => showToast(t.common.loading, "error"))
+      .catch(() => showToast("Failed to load skills", "error"))
       .finally(() => setLoading(false));
   }, []);
 

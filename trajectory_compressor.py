@@ -596,7 +596,7 @@ TURNS TO SUMMARIZE:
 
 Write only the summary, starting with "[CONTEXT SUMMARY]:" prefix."""
 
-        for attempt in range(self.config.max_retries):
+        for attempt in range(max(1, self.config.max_retries)):
             try:
                 metrics.summarization_api_calls += 1
                 summary_temperature = _effective_temperature_for_model(
@@ -665,7 +665,7 @@ TURNS TO SUMMARIZE:
 
 Write only the summary, starting with "[CONTEXT SUMMARY]:" prefix."""
 
-        for attempt in range(self.config.max_retries):
+        for attempt in range(max(1, self.config.max_retries)):
             try:
                 metrics.summarization_api_calls += 1
                 summary_temperature = _effective_temperature_for_model(

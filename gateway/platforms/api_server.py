@@ -3514,6 +3514,14 @@ class APIServerAdapter(BasePlatformAdapter):
                     "unauthorized access to sessions, responses, and cron jobs.",
                     self.name,
                 )
+                if "*" in self._cors_origins:
+                    logger.warning(
+                        "[%s] ⚠️  CORS wildcard ('*') is set with no API key. "
+                        "Any browser origin can reach agent endpoints including terminal "
+                        "execution and cron jobs. Set API_SERVER_KEY or restrict "
+                        "API_SERVER_CORS_ORIGINS to trusted origins.",
+                        self.name,
+                    )
             logger.info(
                 "[%s] API server listening on http://%s:%d (model: %s)",
                 self.name, self._host, self._port, self._model_name,

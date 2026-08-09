@@ -50,8 +50,8 @@ export default function PluginsPage() {
         setMemorySel(p.memory_provider ? p.memory_provider : MEMORY_PROVIDER_BUILTIN);
         setContextSel(p.context_engine || "compressor");
       })
-      .catch(() => showToast(t.common.loading, "error"));
-  }, [showToast, t.common.loading]);
+      .catch(() => showToast("Failed to load plugins", "error"));
+  }, [showToast]);
 
   useEffect(() => {
     setLoading(true);
