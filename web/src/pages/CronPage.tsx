@@ -154,7 +154,7 @@ export default function CronPage() {
         },
         newJobProfile,
       );
-      showToast(t.profiles.created + " ✓", "success");
+      showToast(t.cron.newJob + " ✓", "success");
       setPrompt("");
       setSchedule("");
       setName("");
@@ -326,7 +326,6 @@ export default function CronPage() {
                 <Label htmlFor="cron-name">{t.cron.nameOptional}</Label>
                 <Input
                   id="cron-name"
-                  autoFocus
                   placeholder={t.cron.namePlaceholder}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -337,6 +336,7 @@ export default function CronPage() {
                 <Label htmlFor="cron-prompt">{t.cron.prompt}</Label>
                 <textarea
                   id="cron-prompt"
+                  autoFocus
                   className="flex min-h-[80px] w-full border border-border bg-background/40 px-3 py-2 text-sm font-courier shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/30 focus-visible:border-foreground/25"
                   placeholder={t.cron.promptPlaceholder}
                   value={prompt}

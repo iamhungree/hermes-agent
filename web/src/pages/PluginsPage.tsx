@@ -77,7 +77,7 @@ export default function PluginsPage() {
   const onInstall = async () => {
     const id = installId.trim();
     if (!id) {
-      showToast(t.pluginsPage.installHint, "error");
+      showToast(t.pluginsPage.identifierLabel + " required", "error");
       return;
     }
     setInstallBusy(true);
@@ -515,16 +515,15 @@ function PluginRowCard(props: PluginRowCardProps) {
             ) : null}
 
             {row.can_remove ? (
-
-
               <Button
+                aria-label={t.common.delete}
+                title={t.common.delete}
                 destructive
                 disabled={busy}
                 ghost
                 size="sm"
                 onClick={() => setConfirmRemove(true)}
               >
-
                 {busy ? <Spinner /> : <Trash2 className="h-3.5 w-3.5" />}
               </Button>
             ) : null}
