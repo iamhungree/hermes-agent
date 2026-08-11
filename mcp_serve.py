@@ -177,9 +177,18 @@ def _extract_attachments(msg: dict) -> List[dict]:
     # MEDIA: tags in text content
     text = _extract_message_content(msg)
     if text:
+        try:
+            from gateway.platforms.base import validate_media_delivery_path
+        except ImportError:
+            validate_media_delivery_path = None
         media_pattern = re.compile(r'MEDIA:\s*(\S+)')
         for match in media_pattern.finditer(text):
             path = match.group(1)
+            if validate_media_delivery_path is not None:
+                safe_path = validate_media_delivery_path(path)
+                if not safe_path:
+                    continue
+                path = safe_path
             attachments.append({"type": "media", "path": path})
 
     return attachments
