@@ -1021,10 +1021,13 @@ def build_skills_system_prompt(
     # ── Layer 1: in-process LRU cache ─────────────────────────────────
     # Include the resolved platform so per-platform disabled-skill lists
     # produce distinct cache entries (gateway serves multiple platforms).
-    from gateway.session_context import get_session_env
+    try:
+        from gateway.session_context import get_session_env as _get_session_env
+    except ImportError:
+        _get_session_env = lambda _k: None  # noqa: E731
     _platform_hint = (
         os.environ.get("HERMES_PLATFORM")
-        or get_session_env("HERMES_SESSION_PLATFORM")
+        or _get_session_env("HERMES_SESSION_PLATFORM")
         or ""
     )
     disabled = get_disabled_skill_names()

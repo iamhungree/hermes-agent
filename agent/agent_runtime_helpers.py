@@ -229,7 +229,7 @@ def sanitize_tool_call_arguments(
     messages: list,
     *,
     logger=None,
-    session_id: str = None,
+    session_id: Optional[str] = None,
 ) -> int:
     """Repair corrupted assistant tool-call argument JSON in-place."""
     log = logger or logging.getLogger(__name__)

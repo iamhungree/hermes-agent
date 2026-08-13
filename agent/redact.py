@@ -350,7 +350,7 @@ def redact_sensitive_text(text: str, *, force: bool = False, code_file: bool = F
     match.
     """
     if text is None:
-        return None
+        return ""
     if not isinstance(text, str):
         text = str(text)
     if not text:
