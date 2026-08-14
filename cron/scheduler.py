@@ -561,7 +561,7 @@ def _send_media_via_adapter(
                     "Job '%s': cannot send media %s, gateway loop unavailable",
                     job.get("id", "?"), media_path,
                 )
-                return
+                continue
             try:
                 result = future.result(timeout=30)
             except TimeoutError:

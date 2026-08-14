@@ -402,7 +402,10 @@ class ResponseStore:
             (time.time(), response_id),
         )
         self._conn.commit()
-        return json.loads(row[0])
+        try:
+            return json.loads(row[0])
+        except json.JSONDecodeError:
+            return None
 
     def put(self, response_id: str, data: Dict[str, Any]) -> None:
         """Store a response, evicting the oldest if at capacity."""
@@ -654,6 +657,12 @@ except ImportError:
     _cron_pause = None
     _cron_resume = None
     _cron_trigger = None
+
+_scan_cron_prompt = None
+try:
+    from tools.cronjob_tools import _scan_cron_prompt
+except ImportError:
+    pass
 
 
 class APIServerAdapter(BasePlatformAdapter):
@@ -2509,6 +2518,10 @@ class APIServerAdapter(BasePlatformAdapter):
                 return web.json_response(
                     {"error": f"Prompt must be ≤ {self._MAX_PROMPT_LENGTH} characters"}, status=400,
                 )
+            if _scan_cron_prompt is not None:
+                scan_error = _scan_cron_prompt(prompt)
+                if scan_error:
+                    return web.json_response({"error": scan_error}, status=400)
             if repeat is not None and (not isinstance(repeat, int) or repeat < 1):
                 return web.json_response({"error": "Repeat must be a positive integer"}, status=400)
 
