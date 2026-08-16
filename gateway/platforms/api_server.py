@@ -2586,6 +2586,10 @@ class APIServerAdapter(BasePlatformAdapter):
                 return web.json_response(
                     {"error": f"Prompt must be ≤ {self._MAX_PROMPT_LENGTH} characters"}, status=400,
                 )
+            if "prompt" in sanitized and _scan_cron_prompt is not None:
+                scan_error = _scan_cron_prompt(sanitized["prompt"])
+                if scan_error:
+                    return web.json_response({"error": scan_error}, status=400)
             job = _cron_update(job_id, sanitized)
             if not job:
                 return web.json_response({"error": "Job not found"}, status=404)

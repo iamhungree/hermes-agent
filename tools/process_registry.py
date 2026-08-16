@@ -842,8 +842,9 @@ class ProcessRegistry:
             pty.wait()
         except Exception as e:
             logger.debug("PTY wait timed out or failed: %s", e)
-        session.exited = True
-        session.exit_code = pty.exitstatus if hasattr(pty, 'exitstatus') else -1
+        with session._lock:
+            session.exited = True
+            session.exit_code = pty.exitstatus if hasattr(pty, 'exitstatus') else -1
         self._move_to_finished(session)
 
     def _move_to_finished(self, session: ProcessSession):

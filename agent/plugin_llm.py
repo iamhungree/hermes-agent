@@ -371,6 +371,28 @@ def _normalize_input_block(block: PluginLlmInput) -> Dict[str, Any]:
     raise ValueError(f"Unsupported input block: {type(block).__name__}")
 
 
+def _check_messages_for_unsafe_urls(messages: List[Dict[str, Any]]) -> None:
+    """Raise ValueError if any image_url block in ``messages`` targets an unsafe host.
+
+    ``complete()`` forwards raw caller-supplied messages directly to the LLM
+    provider, bypassing the per-input guard in ``_build_structured_messages``.
+    Without this check a plugin could pass an internal-network URL and have the
+    provider's HTTP client (or a local model server) fetch it.
+    """
+    from tools.url_safety import is_safe_url
+    for msg in messages:
+        content = msg.get("content") if isinstance(msg, dict) else None
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "image_url":
+                url = (block.get("image_url") or {}).get("url", "")
+                if url and not is_safe_url(url):
+                    raise ValueError(f"plugin_llm: image URL blocked by safety check: {url!r}")
+
+
 def _build_structured_messages(
     *,
     instructions: str,
@@ -661,6 +683,7 @@ class PluginLlm:
         ``plugins.entries.<id>.llm.allow_*_override`` (see module
         docstring).
         """
+        _check_messages_for_unsafe_urls(messages)
         policy = self._policy_loader(self._plugin_id)
         eff_provider, eff_model, eff_agent, eff_profile = _check_overrides(
             policy,
