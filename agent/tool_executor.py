@@ -299,6 +299,7 @@ def execute_tool_calls_concurrent(agent, assistant_message, messages: list, effe
                 # or a new message during concurrent tool execution.
                 _conc_start = time.time()
                 _interrupt_logged = False
+                _last_heartbeat = 0
                 while True:
                     done, not_done = concurrent.futures.wait(
                         futures, timeout=5.0,
@@ -327,8 +328,10 @@ def execute_tool_calls_concurrent(agent, assistant_message, messages: list, effe
                         break
 
                     _conc_elapsed = int(time.time() - _conc_start)
-                    # Heartbeat every ~30s (6 × 5s poll intervals)
-                    if _conc_elapsed > 0 and _conc_elapsed % 30 < 6:
+                    # Heartbeat every 30s — track last-fire time so the
+                    # condition fires exactly once per interval, not in pairs.
+                    if _conc_elapsed - _last_heartbeat >= 30:
+                        _last_heartbeat = _conc_elapsed
                         _still_running = [
                             parsed_calls[futures.index(f)][1]
                             for f in not_done
