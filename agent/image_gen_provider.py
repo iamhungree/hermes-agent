@@ -223,6 +223,11 @@ def save_url_image(
     network / HTTP / oversize / non-image-content-type error so callers can
     fall back to returning the bare URL with a clear error message.
     """
+    from tools.url_safety import is_safe_url
+
+    if not is_safe_url(url):
+        raise ValueError(f"save_url_image: URL blocked by safety check: {url!r}")
+
     import requests
 
     response = requests.get(url, timeout=timeout, stream=True)
