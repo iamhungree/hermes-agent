@@ -1216,8 +1216,11 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
             if _prior_cwd is not None:
                 try:
                     os.chdir(_prior_cwd)
-                except OSError:
-                    pass
+                except OSError as _chdir_exc:
+                    logger.warning(
+                        "Failed to restore working directory to %s after job: %s",
+                        _prior_cwd, _chdir_exc,
+                    )
 
         now_iso = _hermes_now().strftime("%Y-%m-%d %H:%M:%S")
 

@@ -239,6 +239,23 @@ def _resource_link_to_parts(block: ResourceContentBlock) -> list[dict[str, Any]]
             ),
         }]
 
+    # Block credential / secret stores from being injected into LLM context.
+    try:
+        from agent.file_safety import get_read_block_error
+        _block_err = get_read_block_error(str(path))
+    except Exception:
+        _block_err = None
+    if _block_err:
+        return [{
+            "type": "text",
+            "text": _format_resource_text(
+                uri=uri,
+                name=name,
+                title=title,
+                body=f"[Blocked: {_block_err}]",
+            ),
+        }]
+
     # Image files: emit a short text header + image_url data URL so vision
     # models can see the attachment instead of a "binary omitted" note.
     image_mime = mime_type if _is_image_resource(mime_type) else _guess_image_mime_from_path(path)
