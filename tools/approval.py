@@ -32,6 +32,15 @@ _approval_session_key: contextvars.ContextVar[str] = contextvars.ContextVar(
     default="",
 )
 
+# ACP uses this to mark a context as "interactive" without writing to
+# os.environ, which is process-global and races under the executor when
+# multiple ACP sessions share a ThreadPoolExecutor.  ctx.run() isolates
+# ContextVar writes automatically; no save/restore token is needed.
+_interactive_ctx: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "approval_interactive",
+    default=False,
+)
+
 
 def _fire_approval_hook(hook_name: str, **kwargs) -> None:
     """Invoke a plugin lifecycle hook for the approval system.
@@ -958,7 +967,7 @@ def check_dangerous_command(command: str, env_type: str,
     if is_approved(session_key, pattern_key):
         return {"approved": True, "message": None}
 
-    is_cli = env_var_enabled("HERMES_INTERACTIVE")
+    is_cli = env_var_enabled("HERMES_INTERACTIVE") or _interactive_ctx.get()
     is_gateway = _is_gateway_approval_context()
 
     if not is_cli and not is_gateway:
@@ -1088,7 +1097,7 @@ def check_all_command_guards(command: str, env_type: str,
     if is_truthy_value(os.getenv("HERMES_YOLO_MODE")) or is_current_session_yolo_enabled() or approval_mode == "off":
         return {"approved": True, "message": None}
 
-    is_cli = env_var_enabled("HERMES_INTERACTIVE")
+    is_cli = env_var_enabled("HERMES_INTERACTIVE") or _interactive_ctx.get()
     is_gateway = _is_gateway_approval_context()
     is_ask = env_var_enabled("HERMES_EXEC_ASK")
 
