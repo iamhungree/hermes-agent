@@ -116,12 +116,20 @@ def record_nous_rate_limit(
 
         # Atomic write: write to temp file + rename
         fd, tmp_path = tempfile.mkstemp(dir=state_dir, suffix=".tmp")
+        _fd_taken = False
         try:
-            with os.fdopen(fd, "w") as f:
+            f = os.fdopen(fd, "w")
+            _fd_taken = True
+            with f:
                 json.dump(state, f)
             atomic_replace(tmp_path, path)
         except Exception:
-            # Clean up temp file on failure
+            # Close raw fd only if os.fdopen never took ownership.
+            if not _fd_taken:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
             try:
                 os.unlink(tmp_path)
             except OSError:

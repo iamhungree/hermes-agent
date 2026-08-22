@@ -549,10 +549,6 @@ def try_shrink_image_parts_in_messages(api_messages: list) -> bool:
                 )
             finally:
                 try:
-                    tmp.close()
-                except Exception:
-                    pass
-                try:
                     Path(tmp.name).unlink(missing_ok=True)
                 except Exception:
                     pass

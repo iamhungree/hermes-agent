@@ -1136,13 +1136,14 @@ def run_conversation(
                     if isinstance(getattr(agent, "client", None), Mock):
                         _use_streaming = False
 
+                api_start_time = time.time()
                 if _use_streaming:
                     response = agent._interruptible_streaming_api_call(
                         api_kwargs, on_first_delta=_stop_spinner
                     )
                 else:
                     response = agent._interruptible_api_call(api_kwargs)
-                
+
                 api_duration = time.time() - api_start_time
                 
                 # Stop thinking spinner silently -- the response box or tool

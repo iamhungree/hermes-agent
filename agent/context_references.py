@@ -19,7 +19,15 @@ REFERENCE_PATTERN = re.compile(
 )
 TRAILING_PUNCTUATION = ",.;!?"
 _SENSITIVE_HOME_DIRS = (".ssh", ".aws", ".gnupg", ".kube", ".docker", ".azure", ".config/gh")
-_SENSITIVE_HERMES_DIRS = (Path("skills") / ".hub",)
+_SENSITIVE_HERMES_DIRS = (Path("skills") / ".hub", Path("mcp-tokens"))
+_SENSITIVE_HERMES_FILES = (
+    Path("auth.json"),
+    Path("auth.lock"),
+    Path("config.yaml"),
+    Path("webhook_subscriptions.json"),
+    Path("auth") / "google_oauth.json",
+    Path(".anthropic_oauth.json"),
+)
 _SENSITIVE_HOME_FILES = (
     Path(".ssh") / "authorized_keys",
     Path(".ssh") / "id_rsa",
@@ -346,6 +354,7 @@ def _ensure_reference_path_allowed(path: Path) -> None:
 
     blocked_exact = {home / rel for rel in _SENSITIVE_HOME_FILES}
     blocked_exact.add(hermes_home / ".env")
+    blocked_exact.update(hermes_home / rel for rel in _SENSITIVE_HERMES_FILES)
     blocked_dirs = [home / rel for rel in _SENSITIVE_HOME_DIRS]
     blocked_dirs.extend(hermes_home / rel for rel in _SENSITIVE_HERMES_DIRS)
 
