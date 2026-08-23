@@ -1411,6 +1411,7 @@ async def _send_matrix_via_adapter(pconfig, chat_id, message, media_files=None, 
 
     media_files = media_files or []
 
+    adapter = None
     try:
         adapter = MatrixAdapter(pconfig)
         connected = await adapter.connect()

@@ -1344,9 +1344,9 @@ def main(
         compression_config = CompressionConfig()
     
     # Apply CLI overrides
-    if target_max_tokens:
+    if target_max_tokens is not None:
         compression_config.target_max_tokens = target_max_tokens
-    if tokenizer:
+    if tokenizer is not None:
         compression_config.tokenizer_name = tokenizer
     
     # Validate sample_percent

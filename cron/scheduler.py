@@ -1840,6 +1840,12 @@ def tick(verbose: bool = True, adapters=None, loop=None) -> int:
             fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         elif msvcrt:
             msvcrt.locking(lock_fd.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            # Neither fcntl nor msvcrt available; skip tick to avoid
+            # running jobs twice when two scheduler threads overlap.
+            logger.warning("cron tick skipped: no file-locking module available (fcntl/msvcrt)")
+            lock_fd.close()
+            return 0
     except (OSError, IOError):
         logger.debug("Tick skipped — another instance holds the lock")
         if lock_fd is not None:
