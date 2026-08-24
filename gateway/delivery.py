@@ -195,7 +195,12 @@ class DeliveryRouter:
         timestamp = _now.strftime("%Y%m%d_%H%M%S")
 
         if job_id:
-            safe_job_id = Path(job_id).name or "misc"
+            # ``Path("..").name == ".."`` — reject dot components so a
+            # crafted job_id can't escape self.output_dir.
+            safe_job_id = Path(job_id).name
+            if safe_job_id in (".", ".."):
+                safe_job_id = ""
+            safe_job_id = safe_job_id or "misc"
             output_path = self.output_dir / safe_job_id / f"{timestamp}.md"
         else:
             output_path = self.output_dir / "misc" / f"{timestamp}.md"
@@ -235,7 +240,10 @@ class DeliveryRouter:
         """Save full cron output to disk and return the file path."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        safe_job_id = Path(job_id).name or "misc"
+        safe_job_id = Path(job_id).name
+        if safe_job_id in (".", ".."):
+            safe_job_id = ""
+        safe_job_id = safe_job_id or "misc"
         path = self.output_dir / f"{safe_job_id}_{timestamp}.txt"
         path.write_text(content, encoding="utf-8")
         return path

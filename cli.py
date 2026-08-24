@@ -4858,7 +4858,7 @@ class HermesCLI:
                         _cprint(f"  Session title applied: {self._pending_title}")
                         self._pending_title = None
                     # else: row creation failed transiently — keep _pending_title for retry
-                except (ValueError, Exception) as e:
+                except Exception as e:
                     _cprint(f"  Could not apply pending title: {e}")
                     # Keep _pending_title so it can be retried after row creation succeeds
             return True
@@ -8907,7 +8907,7 @@ class HermesCLI:
                     s.connect(("127.0.0.1", _port))
                     s.close()
                     print("   Status: ✓ reachable")
-                except (OSError, Exception):
+                except Exception:
                     print("   Status: ⚠ not reachable (browser may not be running)")
             else:
                 try:

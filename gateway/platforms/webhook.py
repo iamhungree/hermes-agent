@@ -428,6 +428,13 @@ class WebhookAdapter(BasePlatformAdapter):
                     {"error": "Cannot parse body"}, status=400
                 )
 
+        # JSON body may parse to a non-object (list, string, number); the
+        # header/payload key lookups below require dict semantics, so
+        # collapse anything else to an empty dict rather than 500-ing the
+        # sender after HMAC has already passed.
+        if not isinstance(payload, dict):
+            payload = {}
+
         # Check event type filter
         event_type = (
             request.headers.get("X-GitHub-Event", "")
