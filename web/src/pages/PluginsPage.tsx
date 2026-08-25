@@ -51,7 +51,7 @@ export default function PluginsPage() {
         setContextSel(p.context_engine || "compressor");
       })
       .catch(() => showToast(t.status.failed, "error"));
-  }, [showToast]);
+  }, [showToast, t]);
 
   useEffect(() => {
     setLoading(true);

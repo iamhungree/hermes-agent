@@ -692,8 +692,6 @@ class SessionDB:
         except sqlite3.OperationalError:
             cursor.executescript(FTS_TRIGRAM_SQL)
 
-        self._conn.commit()
-
     # =========================================================================
     # Session lifecycle
     # =========================================================================

@@ -7859,7 +7859,7 @@ class HermesCLI:
                     print(f"  Skills: {', '.join(result['skills'])}")
                 print(f"  Next run: {result.get('next_run_at') or 'N/A'}")
             else:
-                print(f"(x_x) Failed to create job: {result.get('error')}")
+                print(f"(x_x) Failed to create job: {result.get('error') or 'unknown error'}")
             return
 
         if subcommand == "edit":
@@ -7907,7 +7907,7 @@ class HermesCLI:
                 else:
                     print("  Skills: none")
             else:
-                print(f"(x_x) Failed to update job: {result.get('error')}")
+                print(f"(x_x) Failed to update job: {result.get('error') or 'unknown error'}")
             return
 
         if subcommand in {"pause", "resume", "run", "remove", "rm", "delete"}:
@@ -7919,7 +7919,7 @@ class HermesCLI:
             action = "remove" if subcommand in {"remove", "rm", "delete"} else subcommand
             result = _cron_api(action=action, job_id=job_id, reason="paused from /cron" if action == "pause" else None)
             if not result.get("success"):
-                print(f"(x_x) Failed to {action} job: {result.get('error')}")
+                print(f"(x_x) Failed to {action} job: {result.get('error') or 'unknown error'}")
                 return
             if action == "pause":
                 print(f"(^_^)b Paused job: {result['job']['name']} ({job_id})")
