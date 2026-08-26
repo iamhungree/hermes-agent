@@ -391,6 +391,12 @@ def _check_messages_for_unsafe_urls(messages: List[Dict[str, Any]]) -> None:
                 url = (block.get("image_url") or {}).get("url", "")
                 if url and not is_safe_url(url):
                     raise ValueError(f"plugin_llm: image URL blocked by safety check: {url!r}")
+            elif block.get("type") == "image":
+                source = block.get("source") or {}
+                if source.get("type") == "url":
+                    url = source.get("url", "")
+                    if url and not is_safe_url(url):
+                        raise ValueError(f"plugin_llm: image URL blocked by safety check: {url!r}")
 
 
 def _build_structured_messages(

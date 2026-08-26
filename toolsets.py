@@ -597,7 +597,7 @@ def get_toolset(name: str) -> Optional[Dict[str, Any]]:
     }
 
 
-def resolve_toolset(name: str, visited: Set[str] = None) -> List[str]:
+def resolve_toolset(name: str, visited: Optional[Set[str]] = None) -> List[str]:
     """
     Recursively resolve a toolset to get all tool names.
     

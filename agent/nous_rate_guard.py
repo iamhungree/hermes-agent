@@ -12,6 +12,7 @@ it before subsequent attempts, we eliminate the amplification effect.
 
 from __future__ import annotations
 
+import email.utils
 import json
 import logging
 import os
@@ -63,6 +64,13 @@ def _parse_reset_seconds(headers: Optional[Mapping[str, str]]) -> Optional[float
                 if val > 0:
                     return val
             except (TypeError, ValueError):
+                pass
+            try:
+                parsed = email.utils.parsedate_to_datetime(raw)
+                delta = parsed.timestamp() - time.time()
+                if delta > 0:
+                    return delta
+            except Exception:
                 pass
 
     return None

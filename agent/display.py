@@ -793,12 +793,13 @@ def _trim_error(msg: str) -> str:
     suffix stays readable on narrow terminals.
     """
     msg = msg.strip()
-    # Common case: "File not found: /very/long/absolute/path/foo.py"
-    if "File not found:" in msg:
-        _, _, tail = msg.partition("File not found:")
-        tail = tail.strip()
-        if "/" in tail:
-            msg = f"File not found: {tail.rsplit('/', 1)[-1]}"
+    for _prefix in ("File not found:", "No such file or directory:", "Permission denied:", "IsADirectory:", "NotADirectoryError:"):
+        if _prefix in msg:
+            _, _, tail = msg.partition(_prefix)
+            tail = tail.strip()
+            if "/" in tail:
+                msg = f"{_prefix} {tail.rsplit('/', 1)[-1]}"
+            break
     if len(msg) > _ERROR_SUFFIX_MAX_LEN:
         msg = msg[: _ERROR_SUFFIX_MAX_LEN - 3] + "..."
     return msg
@@ -848,7 +849,7 @@ def _detect_tool_failure(tool_name: str, result: str | None) -> tuple[bool, str]
     if not isinstance(result, str):
         return False, ""
     lower = result[:500].lower()
-    if '"error"' in lower or '"failed"' in lower or result.startswith("Error"):
+    if '"error"' in lower or '"failed"' in lower or lower.startswith("error"):
         return True, " [error]"
 
     return False, ""
