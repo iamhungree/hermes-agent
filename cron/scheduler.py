@@ -1383,45 +1383,50 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
     # Cron output delivery itself reads job["origin"] directly via
     # _resolve_origin(job) and the HERMES_CRON_AUTO_DELIVER_* vars set
     # below, so clearing HERMES_SESSION_* here does not affect delivery.
-    _ctx_tokens = set_session_vars(
-        platform="",
-        chat_id="",
-        chat_name="",
-    )
     _cron_delivery_vars = (
         "HERMES_CRON_AUTO_DELIVER_PLATFORM",
         "HERMES_CRON_AUTO_DELIVER_CHAT_ID",
         "HERMES_CRON_AUTO_DELIVER_THREAD_ID",
     )
-    for _var_name in _cron_delivery_vars:
-        _VAR_MAP[_var_name].set("")
-
-    # Per-job working directory.  When set (and validated at create/update
-    # time), we point TERMINAL_CWD at it so:
-    #   - build_context_files_prompt() picks up AGENTS.md / CLAUDE.md /
-    #     .cursorrules from the job's project dir, AND
-    #   - the terminal, file, and code-exec tools run commands from there.
-    #
-    # tick() serializes jobs that mutate process-global runtime state (workdir
-    # and/or profile jobs) outside the parallel pool, so mutating
-    # os.environ["TERMINAL_CWD"] here is safe for those jobs. For workdir-less
-    # jobs we leave TERMINAL_CWD untouched — preserves the original behaviour
-    # (skip_context_files=True, tools use whatever cwd the scheduler has).
-    _job_workdir = (job.get("workdir") or "").strip() or None
-    if _job_workdir and not Path(_job_workdir).is_dir():
-        # Directory was removed between create-time validation and now.  Log
-        # and drop back to old behaviour rather than crashing the job.
-        logger.warning(
-            "Job '%s': configured workdir %r no longer exists — running without it",
-            job_id, _job_workdir,
-        )
-        _job_workdir = None
-    _prior_terminal_cwd = os.environ.get("TERMINAL_CWD", _CRON_CWD_SENTINEL)
-    if _job_workdir:
-        os.environ["TERMINAL_CWD"] = _job_workdir
-        logger.info("Job '%s': using workdir %s", job_id, _job_workdir)
+    _ctx_tokens = set_session_vars(
+        platform="",
+        chat_id="",
+        chat_name="",
+    )
+    # Pre-initialise so the finally block can always reference them safely,
+    # even if an exception fires before the setup code below runs.
+    _job_workdir = None
+    _prior_terminal_cwd = _CRON_CWD_SENTINEL
 
     try:
+        for _var_name in _cron_delivery_vars:
+            _VAR_MAP[_var_name].set("")
+
+        # Per-job working directory.  When set (and validated at create/update
+        # time), we point TERMINAL_CWD at it so:
+        #   - build_context_files_prompt() picks up AGENTS.md / CLAUDE.md /
+        #     .cursorrules from the job's project dir, AND
+        #   - the terminal, file, and code-exec tools run commands from there.
+        #
+        # tick() serializes jobs that mutate process-global runtime state (workdir
+        # and/or profile jobs) outside the parallel pool, so mutating
+        # os.environ["TERMINAL_CWD"] here is safe for those jobs. For workdir-less
+        # jobs we leave TERMINAL_CWD untouched — preserves the original behaviour
+        # (skip_context_files=True, tools use whatever cwd the scheduler has).
+        _job_workdir = (job.get("workdir") or "").strip() or None
+        if _job_workdir and not Path(_job_workdir).is_dir():
+            # Directory was removed between create-time validation and now.  Log
+            # and drop back to old behaviour rather than crashing the job.
+            logger.warning(
+                "Job '%s': configured workdir %r no longer exists — running without it",
+                job_id, _job_workdir,
+            )
+            _job_workdir = None
+        _prior_terminal_cwd = os.environ.get("TERMINAL_CWD", _CRON_CWD_SENTINEL)
+        if _job_workdir:
+            os.environ["TERMINAL_CWD"] = _job_workdir
+            logger.info("Job '%s': using workdir %s", job_id, _job_workdir)
+
         # Re-read .env and config.yaml fresh every run so provider/key
         # changes take effect without a gateway restart.
         from dotenv import load_dotenv

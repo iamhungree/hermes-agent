@@ -848,6 +848,8 @@ def remove_job(job_id: str) -> bool:
         return False
     canonical_id = job["id"]
     safe_id = Path(canonical_id).name
+    if safe_id in (".", ".."):
+        safe_id = ""
     with _jobs_file_lock:
         jobs = load_jobs()
         original_len = len(jobs)
@@ -1077,6 +1079,8 @@ def save_job_output(job_id: str, output: str):
     """Save job output to file."""
     ensure_dirs()
     safe_id = Path(job_id).name
+    if safe_id in (".", ".."):
+        safe_id = ""
     if not safe_id or safe_id != job_id:
         logger.warning("[cron] save_job_output: job_id %r is not a safe path component, skipping", job_id)
         return None
