@@ -604,11 +604,17 @@ class InsightsEngine:
         hour_counts = Counter()
         daily_counts = Counter()  # date string -> count
 
+        try:
+            from hermes_time import get_timezone as _get_tz
+            _tz = _get_tz()
+        except Exception:
+            _tz = None
+
         for s in sessions:
             ts = s.get("started_at")
             if not ts:
                 continue
-            dt = datetime.fromtimestamp(ts)
+            dt = datetime.fromtimestamp(ts, tz=_tz)
             day_counts[dt.weekday()] += 1
             hour_counts[dt.hour] += 1
             daily_counts[dt.strftime("%Y-%m-%d")] += 1

@@ -945,7 +945,7 @@ class CredentialPool:
                                             "relogin_required": True,
                                             "at": datetime.now(timezone.utc).isoformat(),
                                         }
-                                        _save_provider_state(auth_store, "xai-oauth", state)
+                                        _store_provider_state(auth_store, "xai-oauth", state, set_active=False)
                                         _save_auth_store(auth_store)
                     except Exception as clear_exc:
                         logger.debug(
@@ -1011,7 +1011,7 @@ class CredentialPool:
                                             "relogin_required": True,
                                             "at": datetime.now(timezone.utc).isoformat(),
                                         }
-                                        _save_provider_state(auth_store, "openai-codex", state)
+                                        _store_provider_state(auth_store, "openai-codex", state, set_active=False)
                                         _save_auth_store(auth_store)
                     except Exception as clear_exc:
                         logger.debug(
@@ -1071,7 +1071,7 @@ class CredentialPool:
                                     exc,
                                     reason="credential_pool_refresh_failure",
                                 )
-                                _save_provider_state(auth_store, "nous", state)
+                                _store_provider_state(auth_store, "nous", state, set_active=False)
                                 _save_auth_store(auth_store)
                     except Exception as clear_exc:
                         logger.debug("Failed to clear terminal Nous OAuth state: %s", clear_exc)

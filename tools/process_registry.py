@@ -801,17 +801,20 @@ class ProcessRegistry:
                     )
                     exit_str = exit_result.get("output", "").strip()
                     try:
-                        session.exit_code = int(exit_str.splitlines()[-1].strip())
+                        exit_code = int(exit_str.splitlines()[-1].strip())
                     except (ValueError, IndexError):
-                        session.exit_code = -1
-                    session.exited = True
+                        exit_code = -1
+                    with session._lock:
+                        session.exit_code = exit_code
+                        session.exited = True
                     self._move_to_finished(session)
                     return
 
             except Exception:
                 # Environment might be gone (sandbox reaped, etc.)
-                session.exited = True
-                session.exit_code = -1
+                with session._lock:
+                    session.exit_code = -1
+                    session.exited = True
                 self._move_to_finished(session)
                 return
 
