@@ -865,7 +865,7 @@ def remove_job(job_id: str) -> bool:
             shutil.rmtree(job_output_dir)
     else:
         logger.warning(
-            "[cron] remove_job: job id %r contains path separators, skipping output dir removal",
+            "[cron] remove_job: job id %r is unsafe (dot, dotdot, or contains path separators), skipping output dir removal",
             canonical_id,
         )
     return True

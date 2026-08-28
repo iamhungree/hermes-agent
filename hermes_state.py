@@ -99,7 +99,8 @@ def get_last_init_error() -> Optional[str]:
     ``_session_db is None``.  Returns ``None`` if SessionDB initialized
     successfully (or hasn't been attempted).
     """
-    return _last_init_error
+    with _last_init_error_lock:
+        return _last_init_error
 
 
 def format_session_db_unavailable(prefix: str = "Session database not available") -> str:
