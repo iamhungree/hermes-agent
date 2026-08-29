@@ -184,7 +184,7 @@ class ProviderProfile:
                 )
                 return None
             req.add_header("Authorization", f"Bearer {api_key}")
-        elif _is_safe_url is not None and not _is_safe_url(url):
+        elif _is_safe_url is None or not _is_safe_url(url):
             logger.warning(
                 "fetch_models: refusing request to private/internal URL: %s",
                 url,

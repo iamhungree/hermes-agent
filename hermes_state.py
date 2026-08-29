@@ -1603,7 +1603,7 @@ class SessionDB:
                         msg.get("tool_call_id"),
                         tool_calls_json,
                         msg.get("tool_name"),
-                        now_ts,
+                        msg.get("timestamp") or now_ts,
                         msg.get("token_count"),
                         msg.get("finish_reason"),
                         msg.get("reasoning") if role == "assistant" else None,
