@@ -130,6 +130,7 @@ def _load_web_config() -> dict:
         from hermes_cli.config import load_config
         return load_config().get("web", {})
     except Exception:
+        logger.debug("Could not load web config; using defaults", exc_info=True)
         return {}
 
 def _get_backend() -> str:

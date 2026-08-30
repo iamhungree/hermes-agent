@@ -281,12 +281,14 @@ class SessionManager:
             cwd=cwd,
             model=original.model or None,
         )
+        with original.runtime_lock:
+            forked_history = copy.deepcopy(original.history)
         state = SessionState(
             session_id=new_id,
             agent=agent,
             cwd=cwd,
             model=getattr(agent, "model", original.model) or original.model,
-            history=copy.deepcopy(original.history),
+            history=forked_history,
             cancel_event=threading.Event(),
         )
         with self._lock:
