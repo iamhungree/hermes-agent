@@ -419,7 +419,7 @@ def _emit_inline_diff(diff_text: str, print_fn) -> bool:
     if print_fn is None or not diff_text:
         return False
     try:
-        print_fn("  ┊ review diff")
+        print_fn("  ┊ diff")
         for line in diff_text.rstrip("\n").splitlines():
             print_fn(line)
         return True
@@ -839,9 +839,13 @@ def _detect_tool_failure(tool_name: str, result: str | None) -> tuple[bool, str]
 
     # Structured error in JSON result (any tool that surfaces {"error": ...}).
     if isinstance(data, dict):
-        err = data.get("error") or data.get("message")
-        if err and (data.get("success") is False or "error" in data):
+        err = data.get("error")
+        if err:  # only when error value is truthy (not null/empty)
             return True, f" [{_trim_error(str(err))}]"
+        if data.get("success") is False:
+            msg = data.get("message")
+            if msg:
+                return True, f" [{_trim_error(str(msg))}]"
 
     # Generic heuristic for non-terminal tools
     # Multimodal tool results (dicts with _multimodal=True) are not strings —
