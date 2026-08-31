@@ -779,6 +779,10 @@ def _classify_by_status(
     if status_code in {503, 529}:
         return result_fn(FailoverReason.overloaded, retryable=True)
 
+    if status_code == 408:
+        # Request Timeout — transient; the provider dropped a slow request.
+        return result_fn(FailoverReason.timeout, retryable=True)
+
     # Other 4xx — non-retryable
     if 400 <= status_code < 500:
         return result_fn(
