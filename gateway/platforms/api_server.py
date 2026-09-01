@@ -2518,10 +2518,14 @@ class APIServerAdapter(BasePlatformAdapter):
                 return web.json_response(
                     {"error": f"Prompt must be ≤ {self._MAX_PROMPT_LENGTH} characters"}, status=400,
                 )
-            if _scan_cron_prompt is not None:
-                scan_error = _scan_cron_prompt(prompt)
-                if scan_error:
-                    return web.json_response({"error": scan_error}, status=400)
+            if _scan_cron_prompt is None:
+                return web.json_response(
+                    {"error": "Cron prompt scanner unavailable; cannot create job safely"},
+                    status=503,
+                )
+            scan_error = _scan_cron_prompt(prompt)
+            if scan_error:
+                return web.json_response({"error": scan_error}, status=400)
             if repeat is not None and (not isinstance(repeat, int) or repeat < 1):
                 return web.json_response({"error": "Repeat must be a positive integer"}, status=400)
 
@@ -2586,7 +2590,12 @@ class APIServerAdapter(BasePlatformAdapter):
                 return web.json_response(
                     {"error": f"Prompt must be ≤ {self._MAX_PROMPT_LENGTH} characters"}, status=400,
                 )
-            if "prompt" in sanitized and _scan_cron_prompt is not None:
+            if "prompt" in sanitized:
+                if _scan_cron_prompt is None:
+                    return web.json_response(
+                        {"error": "Cron prompt scanner unavailable; cannot update prompt safely"},
+                        status=503,
+                    )
                 scan_error = _scan_cron_prompt(sanitized["prompt"])
                 if scan_error:
                     return web.json_response({"error": scan_error}, status=400)
@@ -2989,6 +2998,18 @@ class APIServerAdapter(BasePlatformAdapter):
                     conversation_history.append({"role": msg["role"], "content": str(content)})
 
         run_id = f"run_{uuid.uuid4().hex}"
+        # Security: a caller-supplied session_id loads prior conversation history
+        # from state.db.  Gate this behind API key authentication, same as the
+        # X-Hermes-Session-Id gate in /v1/chat/completions, so unauthenticated
+        # clients cannot enumerate/hijack sessions.
+        if body.get("session_id") and not self._api_key:
+            return web.json_response(
+                _openai_error(
+                    "Session continuation requires API key authentication. "
+                    "Configure API_SERVER_KEY to enable this feature."
+                ),
+                status=403,
+            )
         session_id = body.get("session_id") or stored_session_id or run_id
         approval_session_key = gateway_session_key or session_id or run_id
         ephemeral_system_prompt = instructions
