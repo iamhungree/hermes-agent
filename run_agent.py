@@ -2454,9 +2454,8 @@ class AIAgent:
         Prior bug: getattr(client, "is_closed", False) returned the bound method,
         which is always truthy, causing unnecessary client recreation on every call.
         """
-        from unittest.mock import Mock
-
-        if isinstance(client, Mock):
+        _mock_mod = sys.modules.get("unittest.mock")
+        if _mock_mod is not None and isinstance(client, _mock_mod.Mock):
             return False
 
         is_closed_attr = getattr(client, "is_closed", None)

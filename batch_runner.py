@@ -147,7 +147,7 @@ def _extract_tool_stats(messages: List[Dict[str, Any]]) -> Dict[str, Dict[str, i
                 if not isinstance(fn, dict) or "name" not in fn: continue
                 tool_name = fn["name"]
                 tool_call_id = tool_call.get("id", "")
-                
+
                 # Initialize stats for this tool if not exists
                 if tool_name not in tool_stats:
                     tool_stats[tool_name] = {
@@ -155,9 +155,10 @@ def _extract_tool_stats(messages: List[Dict[str, Any]]) -> Dict[str, Dict[str, i
                         "success": 0,
                         "failure": 0
                     }
-                
+
                 tool_stats[tool_name]["count"] += 1
-                tool_calls_map[tool_call_id] = tool_name
+                if tool_call_id:  # skip empty IDs to prevent result-attribution collisions
+                    tool_calls_map[tool_call_id] = tool_name
         
         # Track tool responses
         elif msg["role"] == "tool":
@@ -1087,8 +1088,8 @@ class BatchRunner:
             "reasoning_statistics": total_reasoning_stats,
         }
         
-        with open(self.stats_file, 'w', encoding='utf-8') as f:
-            json.dump(final_stats, f, indent=2, ensure_ascii=False)
+        from utils import atomic_json_write
+        atomic_json_write(self.stats_file, final_stats)
         
         # Print summary
         print("\n" + "=" * 70)

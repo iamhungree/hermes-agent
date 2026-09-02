@@ -422,8 +422,10 @@ class SessionDB:
                         )
                         time.sleep(jitter)
                         continue
-                # Non-lock error or retries exhausted — propagate.
-                raise
+                    # Final attempt exhausted — fall through to after-loop raise
+                else:
+                    # Non-lock error — propagate immediately.
+                    raise
         # Retries exhausted (shouldn't normally reach here).
         raise last_err or sqlite3.OperationalError(
             "database is locked after max retries"

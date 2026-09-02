@@ -184,11 +184,12 @@ def _extract_attachments(msg: dict) -> List[dict]:
         media_pattern = re.compile(r'MEDIA:\s*(\S+)')
         for match in media_pattern.finditer(text):
             path = match.group(1)
-            if validate_media_delivery_path is not None:
-                safe_path = validate_media_delivery_path(path)
-                if not safe_path:
-                    continue
-                path = safe_path
+            if validate_media_delivery_path is None:
+                continue  # fail-closed: skip paths when validator is unavailable
+            safe_path = validate_media_delivery_path(path)
+            if not safe_path:
+                continue
+            path = safe_path
             attachments.append({"type": "media", "path": path})
 
     return attachments
