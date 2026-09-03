@@ -149,7 +149,7 @@ def record_nous_rate_limit(
             reset_at - now, reset_at,
         )
     except Exception as exc:
-        logger.debug("Failed to write Nous rate limit state: %s", exc)
+        logger.warning("Failed to write Nous rate limit state: %s", exc)
 
 
 def nous_rate_limit_remaining() -> Optional[float]:
