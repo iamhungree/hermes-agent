@@ -878,7 +878,7 @@ def execute_tool_calls_sequential(agent, assistant_message, messages: list, effe
                 print(f"  ✅ Tool {i} completed in {tool_duration:.2f}s")
                 print(agent._wrap_verbose("Result: ", function_result))
             else:
-                _fr_str = function_result if isinstance(function_result, str) else str(function_result)
+                _fr_str = _multimodal_text_summary(function_result) if _is_multimodal_tool_result(function_result) else (function_result if isinstance(function_result, str) else str(function_result))
                 response_preview = _fr_str[:agent.log_prefix_chars] + "..." if len(_fr_str) > agent.log_prefix_chars else _fr_str
                 print(f"  ✅ Tool {i} completed in {tool_duration:.2f}s - {response_preview}")
 
