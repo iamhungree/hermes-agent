@@ -223,7 +223,9 @@ class _SlashWorker:
     def _drain_stderr(self):
         for line in self.proc.stderr or []:
             if text := line.rstrip("\n"):
-                self.stderr_tail = (self.stderr_tail + [text])[-80:]
+                self.stderr_tail.append(text)
+                if len(self.stderr_tail) > 80:
+                    self.stderr_tail = self.stderr_tail[-80:]
 
     def run(self, command: str) -> str:
         if self.proc.poll() is not None:
@@ -232,8 +234,11 @@ class _SlashWorker:
         with self._lock:
             self._seq += 1
             rid = self._seq
-            self.proc.stdin.write(json.dumps({"id": rid, "command": command}) + "\n")
-            self.proc.stdin.flush()
+            try:
+                self.proc.stdin.write(json.dumps({"id": rid, "command": command}) + "\n")
+                self.proc.stdin.flush()
+            except (BrokenPipeError, OSError) as exc:
+                raise RuntimeError(f"slash worker stdin closed: {exc}") from exc
 
             while True:
                 try:
@@ -680,11 +685,10 @@ def _load_cfg() -> dict:
 
 def _save_cfg(cfg: dict):
     global _cfg_cache, _cfg_mtime, _cfg_path
-    import yaml
+    from utils import atomic_yaml_write
 
     path = _hermes_home / "config.yaml"
-    with open(path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(cfg, f)
+    atomic_yaml_write(path, cfg)
     with _cfg_lock:
         _cfg_cache = copy.deepcopy(cfg)
         _cfg_path = path
@@ -725,7 +729,7 @@ def _enable_gateway_prompts() -> None:
 
 
 def _block(event: str, sid: str, payload: dict, timeout: int = 300) -> str:
-    rid = uuid.uuid4().hex[:8]
+    rid = uuid.uuid4().hex
     ev = threading.Event()
     _pending[rid] = (sid, ev)
     payload["request_id"] = rid
@@ -1370,7 +1374,7 @@ def _probe_credentials(agent) -> str:
     try:
         key = getattr(agent, "api_key", "") or ""
         provider = getattr(agent, "provider", "") or ""
-        if not key or key == "no-key-required":
+        if not key:
             return f"No API key configured for provider '{provider}'. First message will fail."
     except Exception:
         pass
@@ -1384,9 +1388,7 @@ def _probe_config_health(cfg: dict) -> str:
         return ""
     warnings: list[str] = []
     null_keys = sorted(k for k, v in cfg.items() if v is None)
-    if not null_keys:
-        pass
-    else:
+    if null_keys:
         keys = ", ".join(f"`{k}`" for k in null_keys)
         warnings.append(
             f"config.yaml has empty section(s): {keys}. "
@@ -6763,7 +6765,7 @@ def _(rid, params: dict) -> dict:
                 rid, 4005, f"blocked: {desc}. Use the agent for dangerous commands."
             )
     except ImportError:
-        pass
+        return _err(rid, 5001, "safety check unavailable")
     try:
         r = subprocess.run(
             cmd, shell=True, capture_output=True, text=True, timeout=30, cwd=os.getcwd()

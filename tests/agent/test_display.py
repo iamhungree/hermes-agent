@@ -96,9 +96,9 @@ class TestBuildToolPreview:
     def test_memory_replace_missing_old_text_marked(self):
         # Avoid empty quotes "" in the preview when old_text is missing/None.
         result = build_tool_preview("memory", {"action": "replace", "target": "memory"})
-        assert result == '~memory: "<missing old_text>"'
+        assert result == '~memory: "(no content)"'
         result = build_tool_preview("memory", {"action": "remove", "target": "memory", "old_text": None})
-        assert result == '-memory: "<missing old_text>"'
+        assert result == '-memory: "(no content)"'
 
     def test_session_search_preview(self):
         result = build_tool_preview("session_search", {"query": "find something"})

@@ -163,9 +163,33 @@ class ProviderProfile:
         import json
         import urllib.request
 
+        try:
+            from tools.url_safety import is_safe_url as _is_safe_url
+        except ImportError:
+            _is_safe_url = None
+
         req = urllib.request.Request(url)
         if api_key:
+            if not url.startswith("https://"):
+                logger.warning(
+                    "Refusing to send API key over non-HTTPS URL: %s — "
+                    "using static model fallback",
+                    url,
+                )
+                return None
+            if _is_safe_url is not None and not _is_safe_url(url):
+                logger.warning(
+                    "fetch_models: refusing request to private/internal URL: %s",
+                    url,
+                )
+                return None
             req.add_header("Authorization", f"Bearer {api_key}")
+        elif _is_safe_url is None or not _is_safe_url(url):
+            logger.warning(
+                "fetch_models: refusing request to private/internal URL: %s",
+                url,
+            )
+            return None
         req.add_header("Accept", "application/json")
         # Some providers (e.g. OpenCode Zen) sit behind a WAF that blocks
         # the default ``Python-urllib/<ver>`` User-Agent.  Set a generic
@@ -174,9 +198,10 @@ class ProviderProfile:
         for k, v in self.default_headers.items():
             req.add_header(k, v)
 
+        _MAX_MODELS_RESPONSE_BYTES = 4 * 1024 * 1024  # 4 MB cap
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                data = json.loads(resp.read().decode())
+                data = json.loads(resp.read(_MAX_MODELS_RESPONSE_BYTES).decode())
             items = data if isinstance(data, list) else data.get("data", [])
             return [m["id"] for m in items if isinstance(m, dict) and "id" in m]
         except Exception as exc:

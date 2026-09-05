@@ -96,42 +96,13 @@ def estimate_usage_cost(*args, **kwargs):
 
 
 def format_duration_compact(*args, **kwargs):
-    seconds = float(args[0] if args else kwargs.get("seconds", 0.0))
-    if seconds < 60:
-        return f"{seconds:.0f}s"
-    minutes = seconds / 60
-    if minutes < 60:
-        return f"{minutes:.0f}m"
-    hours = minutes / 60
-    if hours < 24:
-        remaining_min = int(minutes % 60)
-        return f"{int(hours)}h {remaining_min}m" if remaining_min else f"{int(hours)}h"
-    days = hours / 24
-    return f"{days:.1f}d"
+    from agent.usage_pricing import format_duration_compact as _f
+    return _f(*args, **kwargs)
 
 
 def format_token_count_compact(*args, **kwargs):
-    value = int(args[0] if args else kwargs.get("value", 0))
-    abs_value = abs(value)
-    if abs_value < 1_000:
-        return str(value)
-
-    sign = "-" if value < 0 else ""
-    units = ((1_000_000_000, "B"), (1_000_000, "M"), (1_000, "K"))
-    for threshold, suffix in units:
-        if abs_value >= threshold:
-            scaled = abs_value / threshold
-            if scaled < 10:
-                text = f"{scaled:.2f}"
-            elif scaled < 100:
-                text = f"{scaled:.1f}"
-            else:
-                text = f"{scaled:.0f}"
-            if "." in text:
-                text = text.rstrip("0").rstrip(".")
-            return f"{sign}{text}{suffix}"
-
-    return f"{value:,}"
+    from agent.usage_pricing import format_token_count_compact as _f
+    return _f(*args, **kwargs)
 
 
 def is_table_divider(*args, **kwargs):
@@ -4887,7 +4858,7 @@ class HermesCLI:
                         _cprint(f"  Session title applied: {self._pending_title}")
                         self._pending_title = None
                     # else: row creation failed transiently — keep _pending_title for retry
-                except (ValueError, Exception) as e:
+                except Exception as e:
                     _cprint(f"  Could not apply pending title: {e}")
                     # Keep _pending_title so it can be retried after row creation succeeds
             return True
@@ -6148,7 +6119,6 @@ class HermesCLI:
         try:
             sessions = self._session_db.list_sessions_rich(
                 source="cli",
-                exclude_sources=["tool"],
                 limit=limit,
             )
         except Exception:
@@ -7887,9 +7857,9 @@ class HermesCLI:
                 print(f"  Schedule: {result['schedule']}")
                 if result.get("skills"):
                     print(f"  Skills: {', '.join(result['skills'])}")
-                print(f"  Next run: {result['next_run_at']}")
+                print(f"  Next run: {result.get('next_run_at') or 'N/A'}")
             else:
-                print(f"(x_x) Failed to create job: {result.get('error')}")
+                print(f"(x_x) Failed to create job: {result.get('error') or 'unknown error'}")
             return
 
         if subcommand == "edit":
@@ -7900,7 +7870,7 @@ class HermesCLI:
             job_id = positionals[0]
             existing = get_job(job_id)
             if not existing:
-                print(f"(._.) Job not found: {job_id}")
+                print(f"(._.) Job not found: {job_id}  (run /cron list to see available job IDs)")
                 return
 
             final_skills = None
@@ -7937,7 +7907,7 @@ class HermesCLI:
                 else:
                     print("  Skills: none")
             else:
-                print(f"(x_x) Failed to update job: {result.get('error')}")
+                print(f"(x_x) Failed to update job: {result.get('error') or 'unknown error'}")
             return
 
         if subcommand in {"pause", "resume", "run", "remove", "rm", "delete"}:
@@ -7949,13 +7919,13 @@ class HermesCLI:
             action = "remove" if subcommand in {"remove", "rm", "delete"} else subcommand
             result = _cron_api(action=action, job_id=job_id, reason="paused from /cron" if action == "pause" else None)
             if not result.get("success"):
-                print(f"(x_x) Failed to {action} job: {result.get('error')}")
+                print(f"(x_x) Failed to {action} job: {result.get('error') or 'unknown error'}")
                 return
             if action == "pause":
                 print(f"(^_^)b Paused job: {result['job']['name']} ({job_id})")
             elif action == "resume":
                 print(f"(^_^)b Resumed job: {result['job']['name']} ({job_id})")
-                print(f"  Next run: {result['job'].get('next_run_at')}")
+                print(f"  Next run: {result['job'].get('next_run_at') or 'N/A'}")
             elif action == "run":
                 print(f"(^_^)b Triggered job: {result['job']['name']} ({job_id})")
                 print("  It will run on the next scheduler tick.")
@@ -8937,7 +8907,7 @@ class HermesCLI:
                     s.connect(("127.0.0.1", _port))
                     s.close()
                     print("   Status: ✓ reachable")
-                except (OSError, Exception):
+                except Exception:
                     print("   Status: ⚠ not reachable (browser may not be running)")
             else:
                 try:
@@ -14549,7 +14519,7 @@ def main(
         provider: Inference provider ("auto", "openrouter", "nous", "openai-codex", "zai", "kimi-coding", "minimax", "minimax-cn")
         api_key: API key for authentication
         base_url: Base URL for the API
-        max_turns: Maximum tool-calling iterations (default: 60)
+        max_turns: Maximum tool-calling iterations (default: 90)
         verbose: Enable verbose logging
         compact: Use compact display mode
         list_tools: List available tools and exit
@@ -14663,7 +14633,8 @@ def main(
         )
         if missing_skills:
             missing_display = ", ".join(missing_skills)
-            raise ValueError(f"Unknown skill(s): {missing_display}")
+            print(f"Error: Unknown skill(s): {missing_display}", file=sys.stderr)
+            sys.exit(1)
         if skills_prompt:
             cli.system_prompt = "\n\n".join(
                 part for part in (cli.system_prompt, skills_prompt) if part

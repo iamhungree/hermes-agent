@@ -202,16 +202,19 @@ def _restore_or_build_system_prompt(agent, system_message, conversation_history)
     # Plugin hook: on_session_start — fired once when a brand-new
     # session is created (not on continuation).  Plugins can use this
     # to initialise session-scoped state (e.g. warm a memory cache).
-    try:
-        from hermes_cli.plugins import invoke_hook as _invoke_hook
-        _invoke_hook(
-            "on_session_start",
-            session_id=agent.session_id,
-            model=agent.model,
-            platform=getattr(agent, "platform", None) or "",
-        )
-    except Exception as exc:
-        logger.warning("on_session_start hook failed: %s", exc)
+    # Guard against re-firing on turns where the DB write failed on turn 1
+    # (stored_prompt is falsy but conversation_history is already populated).
+    if not conversation_history:
+        try:
+            from hermes_cli.plugins import invoke_hook as _invoke_hook
+            _invoke_hook(
+                "on_session_start",
+                session_id=agent.session_id,
+                model=agent.model,
+                platform=getattr(agent, "platform", None) or "",
+            )
+        except Exception as exc:
+            logger.warning("on_session_start hook failed: %s", exc)
 
     # Persist the system prompt snapshot in SQLite.  Failure here used
     # to log at DEBUG, which silently broke prefix-cache reuse on the
@@ -269,7 +272,6 @@ def run_conversation(
     # the CLI/gateway override instead of the stale config.yaml
     # default. Idempotent — fine to call every turn.
     try:
-        from agent.auxiliary_client import set_runtime_main
         set_runtime_main(
             getattr(agent, "provider", "") or "",
             getattr(agent, "model", "") or "",
@@ -279,7 +281,6 @@ def run_conversation(
 
     # Tag all log records on this thread with the session ID so
     # ``hermes logs --session <id>`` can filter a single conversation.
-    from hermes_logging import set_session_context
     set_session_context(agent.session_id)
 
     # Bind the skill write-origin ContextVar for this thread so tool
@@ -288,7 +289,6 @@ def run_conversation(
     # a foreground user-directed turn. Set at the top of each call;
     # the review fork runs on its own thread with a fresh context,
     # so the foreground value here does not leak into it.
-    from tools.skill_provenance import set_current_write_origin
     set_current_write_origin(getattr(agent, "_memory_write_origin", "assistant_tool"))
 
     # If the previous turn activated fallback, restore the primary
@@ -806,6 +806,8 @@ def run_conversation(
                     _base = api_msg.get("content", "")
                     if isinstance(_base, str):
                         api_msg["content"] = _base + "\n\n" + "\n\n".join(_injections)
+                    elif isinstance(_base, list):
+                        api_msg["content"] = _base + [{"type": "text", "text": "\n\n".join(_injections)}]
 
             # For ALL assistant messages, pass reasoning back to the API
             # This ensures multi-turn reasoning context is preserved
@@ -1137,13 +1139,14 @@ def run_conversation(
                     if isinstance(getattr(agent, "client", None), Mock):
                         _use_streaming = False
 
+                api_start_time = time.time()
                 if _use_streaming:
                     response = agent._interruptible_streaming_api_call(
                         api_kwargs, on_first_delta=_stop_spinner
                     )
                 else:
                     response = agent._interruptible_api_call(api_kwargs)
-                
+
                 api_duration = time.time() - api_start_time
                 
                 # Stop thinking spinner silently -- the response box or tool
@@ -2023,7 +2026,10 @@ def run_conversation(
                 # 4xx-only gate: never interpret 5xx/timeout as "server
                 # said no to images" — those are transient and must
                 # route to the normal retry path.
-                _status_ok = _err_status is None or (400 <= int(_err_status) < 500)
+                try:
+                    _status_ok = _err_status is None or (400 <= int(_err_status) < 500)
+                except (TypeError, ValueError):
+                    _status_ok = False  # non-numeric status — don't misclassify as image rejection
                 if (
                     getattr(agent, "_vision_supported", True)
                     and _looks_like_image_rejection
@@ -3249,7 +3255,7 @@ def run_conversation(
                 
                 if agent.verbose_logging:
                     for tc in assistant_message.tool_calls:
-                        logging.debug(f"Tool call: {tc.function.name} with args: {tc.function.arguments[:200]}...")
+                        logging.debug(f"Tool call: {tc.function.name} with args: {str(tc.function.arguments or '')[:200]}...")
                 
                 # Validate tool call names - detect model hallucinations
                 # Repair mismatched tool names before validating
@@ -3918,17 +3924,18 @@ def run_conversation(
                     continue
                 if msg.get("role") == "assistant" and msg.get("tool_calls"):
                     answered_ids = {
-                        m["tool_call_id"]
+                        m.get("tool_call_id")
                         for m in messages[idx + 1:]
                         if isinstance(m, dict) and m.get("role") == "tool"
                     }
                     for tc in msg["tool_calls"]:
                         if not tc or not isinstance(tc, dict): continue
-                        if tc["id"] not in answered_ids:
+                        tc_id = tc.get("id")
+                        if tc_id not in answered_ids:
                             err_msg = {
                                 "role": "tool",
                                 "name": _ra().AIAgent._get_tool_call_name_static(tc),
-                                "tool_call_id": tc["id"],
+                                "tool_call_id": tc_id,
                                 "content": f"Error executing tool: {error_msg}",
                             }
                             messages.append(err_msg)
@@ -4007,6 +4014,7 @@ def run_conversation(
         final_response is not None
         and api_call_count < agent.max_iterations
         and not failed
+        and not interrupted
     )
 
     # Save trajectory if enabled.  ``user_message`` may be a multimodal

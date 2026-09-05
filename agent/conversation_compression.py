@@ -144,7 +144,7 @@ def check_compression_model_feasibility(agent: Any) -> None:
             )
 
         threshold = agent.context_compressor.threshold_tokens
-        if aux_context < threshold:
+        if aux_context is not None and aux_context < threshold:
             # Auto-correct: lower the live session threshold so
             # compression actually works this session.  The hard floor
             # above guarantees aux_context >= MINIMUM_CONTEXT_LENGTH,
@@ -288,7 +288,7 @@ def compress_context(
     # The check itself sets ``agent._compression_warning`` so the
     # status-callback replay machinery still emits the warning to the user
     # the first time it would matter.
-    if not getattr(agent, "_compression_feasibility_checked", True):
+    if not getattr(agent, "_compression_feasibility_checked", False):
         try:
             check_compression_model_feasibility(agent)
         finally:
@@ -372,6 +372,7 @@ def compress_context(
     new_system_prompt = agent._build_system_prompt(system_message)
     agent._cached_system_prompt = new_system_prompt
 
+    old_session_id = None
     if agent._session_db:
         try:
             # Propagate title to the new session with auto-numbering
@@ -401,7 +402,7 @@ def compress_context(
                 try:
                     new_title = agent._session_db.get_next_title_in_lineage(old_title)
                     agent._session_db.set_session_title(agent.session_id, new_title)
-                except (ValueError, Exception) as e:
+                except Exception as e:
                     logger.debug("Could not propagate title on compression: %s", e)
             agent._session_db.update_system_prompt(agent.session_id, new_system_prompt)
             # Reset flush cursor — new session starts with no messages written
@@ -415,7 +416,7 @@ def compress_context(
     # rollover instead of re-initializing fresh per-session state.
     # See hermes-lcm#68. Built-in ContextCompressor ignores kwargs.
     try:
-        _old_sid = locals().get("old_session_id")
+        _old_sid = old_session_id
         if _old_sid and hasattr(agent.context_compressor, "on_session_start"):
             agent.context_compressor.on_session_start(
                 agent.session_id or "",
@@ -431,7 +432,6 @@ def compress_context(
     # the logical conversation continues; only the id and DB row rolled
     # over. See #6672.
     try:
-        _old_sid = locals().get("old_session_id")
         if _old_sid and agent._memory_manager:
             agent._memory_manager.on_session_switch(
                 agent.session_id or "",

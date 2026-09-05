@@ -19,7 +19,7 @@ from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-_OSV_ENDPOINT = os.getenv("OSV_ENDPOINT", "https://api.osv.dev/v1/query")
+_OSV_ENDPOINT = "https://api.osv.dev/v1/query"
 _TIMEOUT = 10  # seconds
 
 
@@ -82,15 +82,23 @@ def _parse_package_from_args(
     if not args:
         return None, None
 
-    # Skip flags to find the package token
+    str_args = [a for a in args if isinstance(a, str)]
+
+    # Honour npx's -p/--package flag: "npx -p @scope/pkg cmd" installs
+    # @scope/pkg, not "cmd".  Without this, the command name is scanned
+    # instead of the actual package, letting malicious packages slip through.
     package_token = None
-    for arg in args:
-        if not isinstance(arg, str):
-            continue
-        if arg.startswith("-"):
-            continue
-        package_token = arg
-        break
+    for i, arg in enumerate(str_args):
+        if arg in ("-p", "--package") and i + 1 < len(str_args):
+            package_token = str_args[i + 1]
+            break
+
+    # Fall back to the first non-flag positional argument
+    if package_token is None:
+        for arg in str_args:
+            if not arg.startswith("-"):
+                package_token = arg
+                break
 
     if not package_token:
         return None, None
@@ -108,21 +116,31 @@ def _parse_npm_package(token: str) -> Tuple[Optional[str], Optional[str]]:
         # Scoped: @scope/name@version
         match = re.match(r"^(@[^/]+/[^@]+)(?:@(.+))?$", token)
         if match:
-            return match.group(1), match.group(2)
+            version = match.group(2)
+            # Dist-tags (latest, next, beta, canary, …) are not semver — OSV
+            # returns zero advisories for them, silently bypassing the check.
+            # Any version not starting with a digit is a dist-tag; normalise to
+            # None so we query without a version constraint instead.
+            if version and not re.match(r'^\d', version):
+                version = None
+            return match.group(1), version
         return token, None
     # Unscoped: name@version
     if "@" in token:
         parts = token.rsplit("@", 1)
         name = parts[0]
-        version = parts[1] if len(parts) > 1 and parts[1] != "latest" else None
+        version = parts[1] if re.match(r'^\d', parts[1]) else None
         return name, version
     return token, None
 
 
 def _parse_pypi_package(token: str) -> Tuple[Optional[str], Optional[str]]:
-    """Parse PyPI package: name==version or name[extras]==version."""
-    # Strip extras: name[extra1,extra2]==version
-    match = re.match(r"^([a-zA-Z0-9._-]+)(?:\[[^\]]*\])?(?:==(.+))?$", token)
+    """Parse PyPI package: name[extras][specifier] — only == captures a version."""
+    # Match name + optional extras + optional version specifier.
+    # Only == is captured as a version; other PEP 440 operators (>=, ~=, !=, ^=)
+    # are consumed but not captured so we still extract the correct package name
+    # instead of sending 'requests>=2.0' as a literal package name to OSV.
+    match = re.match(r"^([a-zA-Z0-9._-]+)(?:\[[^\]]*\])?(?:==(.+)|[><=!~^].+)?$", token)
     if match:
         return match.group(1), match.group(2)
     return token, None
@@ -147,8 +165,9 @@ def _query_osv(
         method="POST",
     )
 
+    _MAX_RESPONSE_BYTES = 1 * 1024 * 1024  # 1 MB cap
     with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
-        result = json.loads(resp.read())
+        result = json.loads(resp.read(_MAX_RESPONSE_BYTES))
 
     vulns = result.get("vulns", [])
     # Only malware advisories — ignore regular CVEs

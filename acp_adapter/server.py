@@ -117,16 +117,19 @@ def _resource_display_name(uri: str, name: str | None = None, title: str | None 
     return Path(unquote(candidate)).name or uri or "resource"
 
 
+def _mime_base(mime_type: str | None) -> str:
+    return (mime_type or "").split(";", 1)[0].strip().lower()
+
+
 def _is_text_resource(mime_type: str | None) -> bool:
-    mime = (mime_type or "").split(";", 1)[0].strip().lower()
+    mime = _mime_base(mime_type)
     if not mime:
         return False
     return mime.startswith(_TEXT_RESOURCE_MIME_PREFIXES) or mime in _TEXT_RESOURCE_MIME_TYPES
 
 
 def _is_image_resource(mime_type: str | None) -> bool:
-    mime = (mime_type or "").split(";", 1)[0].strip().lower()
-    return mime.startswith("image/")
+    return _mime_base(mime_type).startswith("image/")
 
 
 def _guess_image_mime_from_path(path: Path) -> str | None:
@@ -233,6 +236,23 @@ def _resource_link_to_parts(block: ResourceContentBlock) -> list[dict[str, Any]]
                 name=name,
                 title=title,
                 body="[Resource link only; Hermes cannot read non-file ACP resource URIs directly.]",
+            ),
+        }]
+
+    # Block credential / secret stores from being injected into LLM context.
+    try:
+        from agent.file_safety import get_read_block_error
+        _block_err = get_read_block_error(str(path))
+    except Exception:
+        _block_err = None
+    if _block_err:
+        return [{
+            "type": "text",
+            "text": _format_resource_text(
+                uri=uri,
+                name=name,
+                title=title,
+                body=f"[Blocked: {_block_err}]",
             ),
         }]
 
@@ -384,6 +404,10 @@ def _image_block_to_openai_part(block: ImageContentBlock) -> dict[str, Any] | No
     if data:
         url = data if data.startswith("data:") else f"data:{mime_type};base64,{data}"
     elif uri:
+        # Reject non-http(s) URIs (file://, ftp://, etc.) to prevent SSRF when
+        # the LLM provider fetches image URLs server-side during inference.
+        if urlparse(uri).scheme.lower() not in ("http", "https"):
+            return None
         url = uri
     else:
         return None
@@ -713,8 +737,11 @@ class HermesACPAgent(acp.Agent):
         """Send ACP native session metadata after Hermes changes it."""
         if not self._conn:
             return
+        _db = self.session_manager._get_db()
+        if _db is None:
+            return
         try:
-            row = self.session_manager._get_db().get_session(session_id)
+            row = _db.get_session(session_id)
         except Exception:
             logger.debug("Could not read ACP session info for %s", session_id, exc_info=True)
             return
@@ -1317,19 +1344,28 @@ class HermesACPAgent(acp.Agent):
         # still running, queue it instead of racing two AIAgent loops against
         # the same state.history. /steer and /queue are handled above and can
         # land immediately.
+        # Keep state mutations inside the lock; perform async I/O outside it.
+        # Awaiting while holding a threading.Lock suspends the coroutine without
+        # releasing the lock, so any coroutine (e.g. cancel()) that subsequently
+        # tries to acquire the same lock will block the event-loop thread →
+        # deadlock requiring a process kill.
+        _queued_depth = -1
         with state.runtime_lock:
             if state.is_running:
                 queued_text = user_text or "[Image attachment]"
                 state.queued_prompts.append(queued_text)
-                depth = len(state.queued_prompts)
-                if self._conn:
-                    update = acp.update_agent_message_text(
-                        f"Queued for the next turn. ({depth} queued)"
-                    )
-                    await self._conn.session_update(session_id, update)
-                return PromptResponse(stop_reason="end_turn")
-            state.is_running = True
-            state.current_prompt_text = user_text or "[Image attachment]"
+                _queued_depth = len(state.queued_prompts)
+            else:
+                state.is_running = True
+                state.current_prompt_text = user_text or "[Image attachment]"
+
+        if _queued_depth >= 0:
+            if self._conn:
+                update = acp.update_agent_message_text(
+                    f"Queued for the next turn. ({_queued_depth} queued)"
+                )
+                await self._conn.session_update(session_id, update)
+            return PromptResponse(stop_reason="end_turn")
 
         logger.info("Prompt on session %s: %s", session_id, user_text[:100])
 
@@ -1405,12 +1441,11 @@ class HermesACPAgent(acp.Agent):
         # callback shape — not the gateway-queue HERMES_EXEC_ASK path,
         # which requires a notify_cb registered in _gateway_notify_cbs.
         previous_approval_cb = None
-        previous_interactive = None
         edit_approval_token = None
         previous_session_id = None
 
         def _run_agent() -> dict:
-            nonlocal previous_approval_cb, previous_interactive, edit_approval_token, previous_session_id
+            nonlocal previous_approval_cb, edit_approval_token, previous_session_id
             # Bind HERMES_SESSION_KEY for this session so per-session caches
             # (e.g. the interactive sudo password cache in tools.terminal_tool)
             # scope to the ACP session rather than leaking across sessions
@@ -1443,8 +1478,14 @@ class HermesACPAgent(acp.Agent):
                     logger.debug("Could not set ACP edit approval requester", exc_info=True)
             # Signal to tools.approval that we have an interactive callback
             # and the non-interactive auto-approve path must not fire.
-            previous_interactive = os.environ.get("HERMES_INTERACTIVE")
-            os.environ["HERMES_INTERACTIVE"] = "1"
+            # Use a ContextVar instead of os.environ so concurrent ACP sessions
+            # on the shared ThreadPoolExecutor cannot race each other's
+            # save/restore — ctx.run() isolates ContextVar writes automatically.
+            try:
+                from tools.approval import _interactive_ctx as _approval_interactive_ctx
+                _approval_interactive_ctx.set(True)
+            except Exception:
+                logger.debug("Could not set ACP interactive context", exc_info=True)
             # Propagate the originating ACP session id to tools that want to
             # tag side-effects with it (e.g. ``kanban_create`` stamps it on
             # the new task so clients can render a per-session board). Save
@@ -1464,11 +1505,6 @@ class HermesACPAgent(acp.Agent):
                 logger.exception("Agent error in session %s", session_id)
                 return {"final_response": f"Error: {e}", "messages": state.history}
             finally:
-                # Restore HERMES_INTERACTIVE.
-                if previous_interactive is None:
-                    os.environ.pop("HERMES_INTERACTIVE", None)
-                else:
-                    os.environ["HERMES_INTERACTIVE"] = previous_interactive
                 # Restore HERMES_SESSION_ID symmetrically.
                 if previous_session_id is None:
                     os.environ.pop("HERMES_SESSION_ID", None)
@@ -1559,10 +1595,14 @@ class HermesACPAgent(acp.Agent):
                     session_id,
                     acp.update_user_message_text(next_prompt),
                 )
-            await self.prompt(
-                prompt=[TextContentBlock(type="text", text=next_prompt)],
-                session_id=session_id,
-            )
+            try:
+                await self.prompt(
+                    prompt=[TextContentBlock(type="text", text=next_prompt)],
+                    session_id=session_id,
+                )
+            except Exception:
+                logger.exception("Drain loop: prompt() failed for queued turn; continuing with remaining queue")
+                continue
 
         usage = None
         if any(result.get(key) is not None for key in ("prompt_tokens", "completion_tokens", "total_tokens")):
@@ -1851,7 +1891,10 @@ class HermesACPAgent(acp.Agent):
         if not steer_text:
             return "Usage: /steer <guidance>"
 
-        if state.is_running and hasattr(state.agent, "steer"):
+        with state.runtime_lock:
+            is_running = state.is_running
+
+        if is_running and hasattr(state.agent, "steer"):
             try:
                 if state.agent.steer(steer_text):
                     preview = steer_text[:80] + ("..." if len(steer_text) > 80 else "")
@@ -1863,7 +1906,7 @@ class HermesACPAgent(acp.Agent):
         with state.runtime_lock:
             state.queued_prompts.append(steer_text)
             depth = len(state.queued_prompts)
-        return f"No active turn — queued for the next turn. ({depth} queued)"
+        return f"No active turn — steer queued for the next turn. ({depth} queued)"
 
     def _cmd_queue(self, args: str, state: SessionState) -> str:
         queued_text = args.strip()

@@ -435,20 +435,21 @@ class MemoryStore:
 
         Returns the entity_id.
         """
-        # Exact name match
+        # Exact name match (case-insensitive via COLLATE NOCASE; = avoids LIKE wildcard expansion)
         row = self._conn.execute(
-            "SELECT entity_id FROM entities WHERE name LIKE ?", (name,)
+            "SELECT entity_id FROM entities WHERE name = ? COLLATE NOCASE", (name,)
         ).fetchone()
         if row is not None:
             return int(row["entity_id"])
 
-        # Search aliases — aliases stored as comma-separated; use LIKE with % boundaries
+        # Search aliases — escape LIKE special chars in caller-supplied name
+        escaped = name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         alias_row = self._conn.execute(
             """
             SELECT entity_id FROM entities
-            WHERE ',' || aliases || ',' LIKE '%,' || ? || ',%'
+            WHERE ',' || aliases || ',' LIKE '%,' || ? || ',%' ESCAPE '\\'
             """,
-            (name,),
+            (escaped,),
         ).fetchone()
         if alias_row is not None:
             return int(alias_row["entity_id"])

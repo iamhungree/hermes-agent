@@ -99,7 +99,8 @@ def get_last_init_error() -> Optional[str]:
     ``_session_db is None``.  Returns ``None`` if SessionDB initialized
     successfully (or hasn't been attempted).
     """
-    return _last_init_error
+    with _last_init_error_lock:
+        return _last_init_error
 
 
 def format_session_db_unavailable(prefix: str = "Session database not available") -> str:
@@ -392,20 +393,22 @@ class SessionDB:
         last_err: Optional[Exception] = None
         for attempt in range(self._WRITE_MAX_RETRIES):
             try:
+                _do_checkpoint = False
                 with self._lock:
                     self._conn.execute("BEGIN IMMEDIATE")
                     try:
                         result = fn(self._conn)
                         self._conn.commit()
+                        self._write_count += 1
+                        _do_checkpoint = (self._write_count % self._CHECKPOINT_EVERY_N_WRITES == 0)
                     except BaseException:
                         try:
                             self._conn.rollback()
                         except Exception:
                             pass
                         raise
-                # Success — periodic best-effort checkpoint.
-                self._write_count += 1
-                if self._write_count % self._CHECKPOINT_EVERY_N_WRITES == 0:
+                # Success — periodic best-effort checkpoint (outside lock, can be slow).
+                if _do_checkpoint:
                     self._try_wal_checkpoint()
                 return result
             except sqlite3.OperationalError as exc:
@@ -419,8 +422,10 @@ class SessionDB:
                         )
                         time.sleep(jitter)
                         continue
-                # Non-lock error or retries exhausted — propagate.
-                raise
+                    # Final attempt exhausted — fall through to after-loop raise
+                else:
+                    # Non-lock error — propagate immediately.
+                    raise
         # Retries exhausted (shouldn't normally reach here).
         raise last_err or sqlite3.OperationalError(
             "database is locked after max retries"
@@ -689,8 +694,6 @@ class SessionDB:
             cursor.execute("SELECT * FROM messages_fts_trigram LIMIT 0")
         except sqlite3.OperationalError:
             cursor.executescript(FTS_TRIGRAM_SQL)
-
-        self._conn.commit()
 
     # =========================================================================
     # Session lifecycle
@@ -1602,7 +1605,7 @@ class SessionDB:
                         msg.get("tool_call_id"),
                         tool_calls_json,
                         msg.get("tool_name"),
-                        now_ts,
+                        msg.get("timestamp") or now_ts,
                         msg.get("token_count"),
                         msg.get("finish_reason"),
                         msg.get("reasoning") if role == "assistant" else None,
@@ -1647,6 +1650,21 @@ class SessionDB:
                 except (json.JSONDecodeError, TypeError):
                     logger.warning("Failed to deserialize tool_calls in get_messages, falling back to []")
                     msg["tool_calls"] = []
+            if msg.get("reasoning_details"):
+                try:
+                    msg["reasoning_details"] = json.loads(msg["reasoning_details"])
+                except (json.JSONDecodeError, TypeError):
+                    msg["reasoning_details"] = None
+            if msg.get("codex_reasoning_items"):
+                try:
+                    msg["codex_reasoning_items"] = json.loads(msg["codex_reasoning_items"])
+                except (json.JSONDecodeError, TypeError):
+                    msg["codex_reasoning_items"] = None
+            if msg.get("codex_message_items"):
+                try:
+                    msg["codex_message_items"] = json.loads(msg["codex_message_items"])
+                except (json.JSONDecodeError, TypeError):
+                    msg["codex_message_items"] = None
             result.append(msg)
         return result
 
@@ -3205,12 +3223,13 @@ class SessionDB:
         no handoff record.
         """
         try:
-            cur = self._conn.execute(
-                "SELECT handoff_state, handoff_platform, handoff_error "
-                "FROM sessions WHERE id = ?",
-                (session_id,),
-            )
-            row = cur.fetchone()
+            with self._lock:
+                cur = self._conn.execute(
+                    "SELECT handoff_state, handoff_platform, handoff_error "
+                    "FROM sessions WHERE id = ?",
+                    (session_id,),
+                )
+                row = cur.fetchone()
             if not row:
                 return None
             return {
@@ -3227,12 +3246,14 @@ class SessionDB:
         Used by the gateway's handoff watcher.
         """
         try:
-            cur = self._conn.execute(
-                "SELECT * FROM sessions "
-                "WHERE handoff_state = 'pending' "
-                "ORDER BY started_at ASC"
-            )
-            return [dict(r) for r in cur.fetchall()]
+            with self._lock:
+                cur = self._conn.execute(
+                    "SELECT * FROM sessions "
+                    "WHERE handoff_state = 'pending' "
+                    "ORDER BY started_at ASC"
+                )
+                rows = cur.fetchall()
+            return [dict(r) for r in rows]
         except Exception:
             return []
 

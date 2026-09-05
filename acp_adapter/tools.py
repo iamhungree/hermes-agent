@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -248,7 +249,7 @@ def _truncate_text(text: str, limit: int = 5000) -> str:
 
 def _fenced_text(text: str, language: str = "") -> str:
     """Return a Markdown fence that cannot be broken by backticks in text."""
-    longest = max((len(run) for run in text.split("`")[1::2]), default=0)
+    longest = max((len(run) for run in re.findall(r"`+", text)), default=0)
     fence = "`" * max(3, longest + 1)
     return f"{fence}{language}\n{text}\n{fence}"
 
@@ -617,7 +618,7 @@ def _format_session_search_result(result: Optional[str]) -> Optional[str]:
         return None
     mode = data.get("mode") or "search"
     query = data.get("query")
-    lines = ["Recent sessions" if mode == "recent" else f"Session search results" + (f" for `{query}`" if query else "")]
+    lines = ["Recent sessions" if mode == "recent" else "Session search results" + (f" for `{query}`" if query else "")]
     if not results:
         lines.append(str(data.get("message") or "No matching sessions found."))
         return "\n".join(lines)
@@ -1304,7 +1305,7 @@ def build_tool_start(
     content = [acp.tool_content(acp.text_block(args_text))]
     return acp.start_tool_call(
         tool_call_id, title, kind=kind, content=content, locations=locations,
-        raw_input=None if tool_name in _POLISHED_TOOLS else arguments,
+        raw_input=arguments,
     )
 
 

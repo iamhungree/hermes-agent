@@ -16,10 +16,6 @@ from pathlib import Path
 from utils import safe_json_loads
 from agent.tool_result_classification import file_mutation_result_landed
 
-# ANSI escape codes for coloring tool failure indicators
-_RED = "\033[31m"
-_RESET = "\033[0m"
-
 logger = logging.getLogger(__name__)
 
 _ANSI_RESET = "\033[0m"
@@ -226,10 +222,10 @@ def build_tool_preview(tool_name: str, args: dict, max_len: int | None = None) -
             content = _oneline(args.get("content", ""))
             return f"+{target}: \"{content[:25]}{'...' if len(content) > 25 else ''}\""
         elif action == "replace":
-            old = _oneline(args.get("old_text") or "") or "<missing old_text>"
+            old = _oneline(args.get("old_text") or "") or "(no content)"
             return f"~{target}: \"{old[:20]}\""
         elif action == "remove":
-            old = _oneline(args.get("old_text") or "") or "<missing old_text>"
+            old = _oneline(args.get("old_text") or "") or "(no content)"
             return f"-{target}: \"{old[:20]}\""
         return action
 
@@ -423,7 +419,7 @@ def _emit_inline_diff(diff_text: str, print_fn) -> bool:
     if print_fn is None or not diff_text:
         return False
     try:
-        print_fn("  ┊ review diff")
+        print_fn("  ┊ diff")
         for line in diff_text.rstrip("\n").splitlines():
             print_fn(line)
         return True
@@ -797,12 +793,13 @@ def _trim_error(msg: str) -> str:
     suffix stays readable on narrow terminals.
     """
     msg = msg.strip()
-    # Common case: "File not found: /very/long/absolute/path/foo.py"
-    if "File not found:" in msg:
-        _, _, tail = msg.partition("File not found:")
-        tail = tail.strip()
-        if "/" in tail:
-            msg = f"File not found: {tail.rsplit('/', 1)[-1]}"
+    for _prefix in ("File not found:", "No such file or directory:", "Permission denied:", "IsADirectory:", "NotADirectoryError:"):
+        if _prefix in msg:
+            _, _, tail = msg.partition(_prefix)
+            tail = tail.strip()
+            if "/" in tail:
+                msg = f"{_prefix} {tail.rsplit('/', 1)[-1]}"
+            break
     if len(msg) > _ERROR_SUFFIX_MAX_LEN:
         msg = msg[: _ERROR_SUFFIX_MAX_LEN - 3] + "..."
     return msg
@@ -842,9 +839,13 @@ def _detect_tool_failure(tool_name: str, result: str | None) -> tuple[bool, str]
 
     # Structured error in JSON result (any tool that surfaces {"error": ...}).
     if isinstance(data, dict):
-        err = data.get("error") or data.get("message")
-        if err and (data.get("success") is False or "error" in data):
+        err = data.get("error")
+        if err:  # only when error value is truthy (not null/empty)
             return True, f" [{_trim_error(str(err))}]"
+        if data.get("success") is False:
+            msg = data.get("message")
+            if msg:
+                return True, f" [{_trim_error(str(msg))}]"
 
     # Generic heuristic for non-terminal tools
     # Multimodal tool results (dicts with _multimodal=True) are not strings —
@@ -852,7 +853,7 @@ def _detect_tool_failure(tool_name: str, result: str | None) -> tuple[bool, str]
     if not isinstance(result, str):
         return False, ""
     lower = result[:500].lower()
-    if '"error"' in lower or '"failed"' in lower or result.startswith("Error"):
+    if '"error"' in lower or '"failed"' in lower or lower.startswith("error"):
         return True, " [error]"
 
     return False, ""
@@ -986,11 +987,11 @@ def get_cute_tool_message(
             return _wrap(f"┊ 🧠 memory    +{target}: \"{_trunc(args.get('content', ''), 30)}\"  {dur}")
         elif action == "replace":
             old = args.get("old_text") or ""
-            old = old if old else "<missing old_text>"
+            old = old if old else "(no content)"
             return _wrap(f"┊ 🧠 memory    ~{target}: \"{_trunc(old, 20)}\"  {dur}")
         elif action == "remove":
             old = args.get("old_text") or ""
-            old = old if old else "<missing old_text>"
+            old = old if old else "(no content)"
             return _wrap(f"┊ 🧠 memory    -{target}: \"{_trunc(old, 20)}\"  {dur}")
         return _wrap(f"┊ 🧠 memory    {action}  {dur}")
     if tool_name == "skills_list":

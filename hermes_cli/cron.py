@@ -278,7 +278,7 @@ def _job_action(action: str, job_id: str, success_verb: str) -> int:
     if action in {"resume", "run"} and result.get("job", {}).get("next_run_at"):
         print(f"  Next run: {result['job']['next_run_at']}")
     if action == "run":
-        print("  It will run on the next scheduler tick.")
+        print("  It has been queued and will run within the next minute.")
     return 0
 
 
@@ -317,6 +317,6 @@ def cron_command(args):
     if subcmd in {"remove", "rm", "delete"}:
         return _job_action("remove", args.job_id, "Removed")
 
-    print(f"Unknown cron command: {subcmd}")
-    print("Usage: hermes cron [list|create|edit|pause|resume|run|remove|status|tick]")
-    sys.exit(1)
+    print(f"Unknown cron command: {subcmd}", file=sys.stderr)
+    print("Usage: hermes cron [list|create|edit|pause|resume|run|remove|status|tick]", file=sys.stderr)
+    return 1

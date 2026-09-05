@@ -479,6 +479,7 @@ class ContextCompressor(ContextEngine):
         self._last_aux_model_failure_model = None
         self._last_compression_savings_pct = 100.0
         self._ineffective_compression_count = 0
+        self._summary_model_fallen_back = False
         self._summary_failure_cooldown_until = 0.0  # transient errors must not block a fresh session
 
     def update_model(
@@ -843,7 +844,16 @@ class ContextCompressor(ContextEngine):
         parts = []
         for msg in turns:
             role = msg.get("role", "unknown")
-            content = redact_sensitive_text(msg.get("content") or "")
+            raw = msg.get("content")
+            if isinstance(raw, list):
+                # Multimodal content: extract text blocks only; skip image/media
+                text_parts = [
+                    block.get("text", "") for block in raw
+                    if isinstance(block, dict) and block.get("type") == "text"
+                ]
+                content = redact_sensitive_text(" ".join(filter(None, text_parts)))
+            else:
+                content = redact_sensitive_text(raw or "")
 
             # Tool results: keep enough content for the summarizer
             if role == "tool":
@@ -1070,6 +1080,10 @@ The user has requested that this compaction PRIORITISE preserving all informatio
             if self.summary_model:
                 call_kwargs["model"] = self.summary_model
             response = call_llm(**call_kwargs)
+            if response is None:
+                raise RuntimeError("call_llm returned None — no provider configured or silent failure")
+            if not response.choices:
+                raise ValueError("LLM returned no choices for compression summary")
             content = response.choices[0].message.content
             # Handle cases where content is not a string (e.g., dict from llama.cpp)
             if not isinstance(content, str):
@@ -1077,6 +1091,11 @@ The user has requested that this compaction PRIORITISE preserving all informatio
             # Redact the summary output as well — the summarizer LLM may
             # ignore prompt instructions and echo back secrets verbatim.
             summary = redact_sensitive_text(content.strip())
+            if not summary:
+                # Provider returned empty/None content — treat as failure so
+                # the abort-on-failure or fallback path runs, rather than
+                # inserting a content-less handoff that discards compressed turns.
+                return None
             # Store for iterative updates on next compaction
             self._previous_summary = summary
             self._summary_failure_cooldown_until = 0.0
@@ -1100,13 +1119,13 @@ The user has requested that this compaction PRIORITISE preserving all informatio
             _status = getattr(e, "status_code", None) or getattr(getattr(e, "response", None), "status_code", None)
             _err_str = str(e).lower()
             _is_model_not_found = (
-                _status in {404, 503}
+                _status in {404}
                 or "model_not_found" in _err_str
                 or "does not exist" in _err_str
                 or "no available channel" in _err_str
             )
             _is_timeout = (
-                _status in {408, 429, 502, 504}
+                _status in {408, 429, 502, 503, 504}
                 or "timeout" in _err_str
             )
             # Non-JSON / malformed-body responses from misconfigured providers
@@ -1492,7 +1511,7 @@ The user has requested that this compaction PRIORITISE preserving all informatio
     # Main compression entry point
     # ------------------------------------------------------------------
 
-    def compress(self, messages: List[Dict[str, Any]], current_tokens: int = None, focus_topic: str = None, force: bool = False) -> List[Dict[str, Any]]:
+    def compress(self, messages: List[Dict[str, Any]], current_tokens: Optional[int] = None, focus_topic: Optional[str] = None, force: bool = False) -> List[Dict[str, Any]]:
         """Compress conversation messages by summarizing middle turns.
 
         Algorithm:
@@ -1577,6 +1596,9 @@ The user has requested that this compaction PRIORITISE preserving all informatio
             if summary_body and not self._previous_summary:
                 self._previous_summary = summary_body
             turns_to_summarize = messages[max(compress_start, summary_idx + 1):compress_end]
+
+        if not turns_to_summarize:
+            return messages
 
         if not self.quiet_mode:
             logger.info(

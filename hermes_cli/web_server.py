@@ -696,6 +696,7 @@ def _spawn_hermes_action(subcommand: List[str], name: str) -> subprocess.Popen:
         popen_kwargs["start_new_session"] = True
 
     proc = subprocess.Popen(cmd, **popen_kwargs)
+    log_file.close()
     _ACTION_PROCS[name] = proc
     return proc
 

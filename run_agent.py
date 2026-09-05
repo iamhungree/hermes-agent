@@ -1729,7 +1729,7 @@ class AIAgent:
             except Exception as e:
                 logger.debug("Failed to propagate interrupt to child agent: %s", e)
         if not self.quiet_mode:
-            print("\n⚡ Interrupt requested" + (f": '{message[:40]}...'" if message and len(message) > 40 else f": '{message}'" if message else ""))
+            self._safe_print("\n⚡ Interrupt requested" + (f": '{message[:40]}...'" if message and len(message) > 40 else f": '{message}'" if message else ""))
 
     def clear_interrupt(self) -> None:
         """Clear any pending interrupt request and the per-thread tool interrupt signal."""
@@ -2454,9 +2454,8 @@ class AIAgent:
         Prior bug: getattr(client, "is_closed", False) returned the bound method,
         which is always truthy, causing unnecessary client recreation on every call.
         """
-        from unittest.mock import Mock
-
-        if isinstance(client, Mock):
+        _mock_mod = sys.modules.get("unittest.mock")
+        if _mock_mod is not None and isinstance(client, _mock_mod.Mock):
             return False
 
         is_closed_attr = getattr(client, "is_closed", None)

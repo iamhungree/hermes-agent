@@ -182,7 +182,7 @@ class WebhookAdapter(BasePlatformAdapter):
                         f"real target (telegram, discord, slack, github_comment, etc.)."
                     )
 
-        app = web.Application()
+        app = web.Application(client_max_size=self._max_body_bytes)
         app.router.add_get("/health", self._handle_health)
         app.router.add_post("/webhooks/{route_name}", self._handle_webhook)
 
@@ -427,6 +427,13 @@ class WebhookAdapter(BasePlatformAdapter):
                 return web.json_response(
                     {"error": "Cannot parse body"}, status=400
                 )
+
+        # JSON body may parse to a non-object (list, string, number); the
+        # header/payload key lookups below require dict semantics, so
+        # collapse anything else to an empty dict rather than 500-ing the
+        # sender after HMAC has already passed.
+        if not isinstance(payload, dict):
+            payload = {}
 
         # Check event type filter
         event_type = (
@@ -842,12 +849,18 @@ class WebhookAdapter(BasePlatformAdapter):
             )
 
         try:
+            pr_number_int = int(pr_number)
+        except (ValueError, TypeError):
+            logger.error("[webhook] github_comment delivery: pr_number is not a valid integer: %r", pr_number)
+            return SendResult(success=False, error="pr_number must be an integer")
+
+        try:
             result = subprocess.run(
                 [
                     "gh",
                     "pr",
                     "comment",
-                    str(pr_number),
+                    str(pr_number_int),
                     "--repo",
                     repo,
                     "--body",

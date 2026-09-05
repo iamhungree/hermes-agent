@@ -1227,10 +1227,11 @@ class MCPServerTask:
                 # to exercise the connection and detect stale sockets.
                 if self.session:
                     try:
-                        await asyncio.wait_for(
-                            self.session.list_tools(),
-                            timeout=30.0,
-                        )
+                        async with self._rpc_lock:
+                            await asyncio.wait_for(
+                                self.session.list_tools(),
+                                timeout=30.0,
+                            )
                     except Exception as exc:
                         logger.warning(
                             "MCP server '%s' keepalive failed, "

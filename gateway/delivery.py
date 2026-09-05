@@ -74,23 +74,38 @@ class DeliveryTarget:
         # Check for platform:chat_id or platform:chat_id:thread_id format
         # Use the original case for chat_id/thread_id to preserve case-sensitive IDs
         if ":" in target_stripped:
-            parts = target_stripped.split(":", 2)
-            platform_str = parts[0].lower()  # Platform names are case-insensitive
-            chat_id = parts[1] if len(parts) > 1 else None
-            thread_id = parts[2] if len(parts) > 2 else None
+            platform_str = target_stripped.split(":", 1)[0].lower()
+            rest = target_stripped[len(platform_str) + 1:]
+            # Matrix room IDs always start with "!" and contain exactly one internal
+            # colon ("!localpart:homeserver"), so the generic split(":", 2) would
+            # truncate the room ID and misinterpret the homeserver domain as a
+            # thread_id.  Detect Matrix IDs by their "!" prefix and use ":$" as the
+            # thread-event separator instead (Matrix event IDs start with "$").
+            if platform_str == "matrix" and rest.startswith("!"):
+                dollar_idx = rest.find(":$")
+                if dollar_idx >= 0:
+                    chat_id = rest[:dollar_idx]
+                    thread_id = rest[dollar_idx + 1:]
+                else:
+                    chat_id = rest
+                    thread_id = None
+            else:
+                sub = rest.split(":", 1)
+                chat_id = sub[0] if sub[0] else None
+                thread_id = sub[1] if len(sub) > 1 else None
             try:
                 platform = Platform(platform_str)
                 return cls(platform=platform, chat_id=chat_id, thread_id=thread_id, is_explicit=True)
             except ValueError:
-                # Unknown platform, treat as local
+                logger.warning("Unknown delivery platform %r — falling back to local", platform_str)
                 return cls(platform=Platform.LOCAL)
-        
+
         # Just a platform name (use home channel)
         try:
             platform = Platform(target_lower)
             return cls(platform=platform)
         except ValueError:
-            # Unknown platform, treat as local
+            logger.warning("Unknown delivery platform %r — falling back to local", target_lower)
             return cls(platform=Platform.LOCAL)
     
     def to_string(self) -> str:
@@ -176,24 +191,31 @@ class DeliveryRouter:
         metadata: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Save content to local files."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
+        _now = datetime.now()
+        timestamp = _now.strftime("%Y%m%d_%H%M%S")
+
         if job_id:
-            output_path = self.output_dir / job_id / f"{timestamp}.md"
+            # ``Path("..").name == ".."`` — reject dot components so a
+            # crafted job_id can't escape self.output_dir.
+            safe_job_id = Path(job_id).name
+            if safe_job_id in (".", ".."):
+                safe_job_id = ""
+            safe_job_id = safe_job_id or "misc"
+            output_path = self.output_dir / safe_job_id / f"{timestamp}.md"
         else:
             output_path = self.output_dir / "misc" / f"{timestamp}.md"
-        
+
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Build the output document
         lines = []
         if job_name:
             lines.append(f"# {job_name}")
         else:
             lines.append("# Delivery Output")
-        
+
         lines.append("")
-        lines.append(f"**Timestamp:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append(f"**Timestamp:** {_now.strftime('%Y-%m-%d %H:%M:%S')}")
         
         if job_id:
             lines.append(f"**Job ID:** {job_id}")
@@ -207,7 +229,7 @@ class DeliveryRouter:
         lines.append("")
         lines.append(content)
         
-        output_path.write_text("\n".join(lines))
+        output_path.write_text("\n".join(lines), encoding="utf-8")
         
         return {
             "path": str(output_path),
@@ -217,10 +239,13 @@ class DeliveryRouter:
     def _save_full_output(self, content: str, job_id: str) -> Path:
         """Save full cron output to disk and return the file path."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        out_dir = get_hermes_home() / "cron" / "output"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        path = out_dir / f"{job_id}_{timestamp}.txt"
-        path.write_text(content)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        safe_job_id = Path(job_id).name
+        if safe_job_id in (".", ".."):
+            safe_job_id = ""
+        safe_job_id = safe_job_id or "misc"
+        path = self.output_dir / f"{safe_job_id}_{timestamp}.txt"
+        path.write_text(content, encoding="utf-8")
         return path
 
     async def _deliver_to_platform(
@@ -245,7 +270,7 @@ class DeliveryRouter:
             logger.info("Cron output truncated (%d chars) — full output: %s", len(content), saved_path)
             content = (
                 content[:TRUNCATED_VISIBLE]
-                + f"\n\n... [truncated, full output saved to {saved_path}]"
+                + "\n\n... [truncated — message too long for this platform]"
             )
         
         send_metadata = dict(metadata or {})

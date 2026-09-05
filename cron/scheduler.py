@@ -131,6 +131,11 @@ from cron.jobs import get_due_jobs, mark_job_run, save_job_output, advance_next_
 # locally for audit.
 SILENT_MARKER = "[SILENT]"
 
+# Sentinel for os.environ.get() calls where the variable may legitimately
+# be set to any string value, including "_UNSET_". Using object() avoids
+# false positives when TERMINAL_CWD is literally set to that string.
+_CRON_CWD_SENTINEL = object()
+
 # Backward-compatible module override used by tests and emergency monkeypatches.
 _hermes_home: Path | None = None
 
@@ -372,6 +377,9 @@ def _resolve_single_delivery_target(job: dict, deliver_value: str) -> Optional[d
         platform_name, rest = deliver_value.split(":", 1)
         platform_key = platform_name.lower()
 
+        if not _is_known_delivery_platform(platform_key):
+            return None
+
         from tools.send_message_tool import _parse_target_ref
 
         parsed_chat_id, parsed_thread_id, is_explicit = _parse_target_ref(platform_key, rest)
@@ -553,7 +561,7 @@ def _send_media_via_adapter(
                     "Job '%s': cannot send media %s, gateway loop unavailable",
                     job.get("id", "?"), media_path,
                 )
-                return
+                continue
             try:
                 result = future.result(timeout=30)
             except TimeoutError:
@@ -741,9 +749,23 @@ def _deliver_result(job: dict, content: str, adapters=None, loop=None) -> Option
                 # prevent "coroutine was never awaited" RuntimeWarning, then retry in a
                 # fresh thread that has no running loop.
                 coro.close()
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, _send_to_platform(platform, pconfig, chat_id, cleaned_delivery_content, thread_id=thread_id, media_files=media_files))
-                    result = future.result(timeout=30)
+                _tpe = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+                try:
+                    future = _tpe.submit(asyncio.run, _send_to_platform(platform, pconfig, chat_id, cleaned_delivery_content, thread_id=thread_id, media_files=media_files))
+                    try:
+                        result = future.result(timeout=30)
+                    except (TimeoutError, concurrent.futures.TimeoutError):
+                        msg = f"delivery to {platform_name}:{chat_id} timed out after 30s"
+                        logger.error("Job '%s': %s", job["id"], msg)
+                        delivery_errors.append(msg)
+                        continue
+                    except Exception as e:
+                        msg = f"delivery to {platform_name}:{chat_id} failed: {e}"
+                        logger.error("Job '%s': %s", job["id"], msg)
+                        delivery_errors.append(msg)
+                        continue
+                finally:
+                    _tpe.shutdown(wait=False, cancel_futures=True)
             except Exception as e:
                 msg = f"delivery to {platform_name}:{chat_id} failed: {e}"
                 logger.error("Job '%s': %s", job["id"], msg)
@@ -1194,8 +1216,11 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
             if _prior_cwd is not None:
                 try:
                     os.chdir(_prior_cwd)
-                except OSError:
-                    pass
+                except OSError as _chdir_exc:
+                    logger.warning(
+                        "Failed to restore working directory to %s after job: %s",
+                        _prior_cwd, _chdir_exc,
+                    )
 
         now_iso = _hermes_now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1358,45 +1383,50 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
     # Cron output delivery itself reads job["origin"] directly via
     # _resolve_origin(job) and the HERMES_CRON_AUTO_DELIVER_* vars set
     # below, so clearing HERMES_SESSION_* here does not affect delivery.
-    _ctx_tokens = set_session_vars(
-        platform="",
-        chat_id="",
-        chat_name="",
-    )
     _cron_delivery_vars = (
         "HERMES_CRON_AUTO_DELIVER_PLATFORM",
         "HERMES_CRON_AUTO_DELIVER_CHAT_ID",
         "HERMES_CRON_AUTO_DELIVER_THREAD_ID",
     )
-    for _var_name in _cron_delivery_vars:
-        _VAR_MAP[_var_name].set("")
-
-    # Per-job working directory.  When set (and validated at create/update
-    # time), we point TERMINAL_CWD at it so:
-    #   - build_context_files_prompt() picks up AGENTS.md / CLAUDE.md /
-    #     .cursorrules from the job's project dir, AND
-    #   - the terminal, file, and code-exec tools run commands from there.
-    #
-    # tick() serializes jobs that mutate process-global runtime state (workdir
-    # and/or profile jobs) outside the parallel pool, so mutating
-    # os.environ["TERMINAL_CWD"] here is safe for those jobs. For workdir-less
-    # jobs we leave TERMINAL_CWD untouched — preserves the original behaviour
-    # (skip_context_files=True, tools use whatever cwd the scheduler has).
-    _job_workdir = (job.get("workdir") or "").strip() or None
-    if _job_workdir and not Path(_job_workdir).is_dir():
-        # Directory was removed between create-time validation and now.  Log
-        # and drop back to old behaviour rather than crashing the job.
-        logger.warning(
-            "Job '%s': configured workdir %r no longer exists — running without it",
-            job_id, _job_workdir,
-        )
-        _job_workdir = None
-    _prior_terminal_cwd = os.environ.get("TERMINAL_CWD", "_UNSET_")
-    if _job_workdir:
-        os.environ["TERMINAL_CWD"] = _job_workdir
-        logger.info("Job '%s': using workdir %s", job_id, _job_workdir)
+    _ctx_tokens = set_session_vars(
+        platform="",
+        chat_id="",
+        chat_name="",
+    )
+    # Pre-initialise so the finally block can always reference them safely,
+    # even if an exception fires before the setup code below runs.
+    _job_workdir = None
+    _prior_terminal_cwd = _CRON_CWD_SENTINEL
 
     try:
+        for _var_name in _cron_delivery_vars:
+            _VAR_MAP[_var_name].set("")
+
+        # Per-job working directory.  When set (and validated at create/update
+        # time), we point TERMINAL_CWD at it so:
+        #   - build_context_files_prompt() picks up AGENTS.md / CLAUDE.md /
+        #     .cursorrules from the job's project dir, AND
+        #   - the terminal, file, and code-exec tools run commands from there.
+        #
+        # tick() serializes jobs that mutate process-global runtime state (workdir
+        # and/or profile jobs) outside the parallel pool, so mutating
+        # os.environ["TERMINAL_CWD"] here is safe for those jobs. For workdir-less
+        # jobs we leave TERMINAL_CWD untouched — preserves the original behaviour
+        # (skip_context_files=True, tools use whatever cwd the scheduler has).
+        _job_workdir = (job.get("workdir") or "").strip() or None
+        if _job_workdir and not Path(_job_workdir).is_dir():
+            # Directory was removed between create-time validation and now.  Log
+            # and drop back to old behaviour rather than crashing the job.
+            logger.warning(
+                "Job '%s': configured workdir %r no longer exists — running without it",
+                job_id, _job_workdir,
+            )
+            _job_workdir = None
+        _prior_terminal_cwd = os.environ.get("TERMINAL_CWD", _CRON_CWD_SENTINEL)
+        if _job_workdir:
+            os.environ["TERMINAL_CWD"] = _job_workdir
+            logger.info("Job '%s': using workdir %s", job_id, _job_workdir)
+
         # Re-read .env and config.yaml fresh every run so provider/key
         # changes take effect without a gateway restart.
         from dotenv import load_dotenv
@@ -1641,7 +1671,6 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
                         _inactivity_timeout = True
                         break
         except Exception:
-            _cron_pool.shutdown(wait=False, cancel_futures=True)
             raise
         finally:
             _cron_pool.shutdown(wait=False, cancel_futures=True)
@@ -1688,7 +1717,10 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
         # would otherwise be delivered as if it were the agent's reply and the
         # job's `last_status` set to "ok". Raise so the except handler below
         # builds the proper failure tuple. (issue #17855)
-        if result.get("failed") is True or result.get("completed") is False:
+        # `partial=True` means the response was truncated but still valid content
+        # that should be delivered — only treat `completed=False` as a failure
+        # when it is NOT accompanied by `partial=True`.
+        if result.get("failed") is True or (result.get("completed") is False and not result.get("partial")):
             _err_text = (
                 result.get("error")
                 or (result.get("final_response") or "").strip()
@@ -1749,7 +1781,7 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
         # only ever mutate it when the job has a workdir; see the setup block
         # at the top of run_job for the serialization guarantee.
         if _job_workdir:
-            if _prior_terminal_cwd == "_UNSET_":
+            if _prior_terminal_cwd is _CRON_CWD_SENTINEL:
                 os.environ.pop("TERMINAL_CWD", None)
             else:
                 os.environ["TERMINAL_CWD"] = _prior_terminal_cwd
@@ -1812,6 +1844,12 @@ def tick(verbose: bool = True, adapters=None, loop=None) -> int:
             fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         elif msvcrt:
             msvcrt.locking(lock_fd.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            # Neither fcntl nor msvcrt available; skip tick to avoid
+            # running jobs twice when two scheduler threads overlap.
+            logger.warning("cron tick skipped: no file-locking module available (fcntl/msvcrt)")
+            lock_fd.close()
+            return 0
     except (OSError, IOError):
         logger.debug("Tick skipped — another instance holds the lock")
         if lock_fd is not None:
@@ -1877,7 +1915,7 @@ def tick(verbose: bool = True, adapters=None, loop=None) -> int:
                 # responses: do not deliver a blank message, and let the
                 # empty-response guard below mark the run as a soft failure.
                 should_deliver = bool(deliver_content.strip())
-                if should_deliver and success and SILENT_MARKER in deliver_content.strip().upper():
+                if should_deliver and success and deliver_content.strip().upper() == SILENT_MARKER:
                     logger.info("Job '%s': agent returned %s — skipping delivery", job["id"], SILENT_MARKER)
                     should_deliver = False
 
@@ -1929,17 +1967,33 @@ def tick(verbose: bool = True, adapters=None, loop=None) -> int:
 
         # Parallel pass for the rest — same behaviour as before.
         if parallel_jobs:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=_max_workers) as _tick_pool:
-                _futures = []
-                for job in parallel_jobs:
-                    _ctx = contextvars.copy_context()
-                    _futures.append(_tick_pool.submit(_ctx.run, _process_job, job))
+            # Do NOT use `with ThreadPoolExecutor(...) as pool:` here.
+            # The context manager calls shutdown(wait=True) on __exit__, which
+            # blocks until all submitted futures complete — even when we catch
+            # TimeoutError below and want to let still-running jobs finish in
+            # the background.  Manual shutdown(wait=False) preserves that intent.
+            _tick_pool = concurrent.futures.ThreadPoolExecutor(max_workers=_max_workers)
+            _futures = []
+            for job in parallel_jobs:
+                _ctx = contextvars.copy_context()
+                _futures.append(_tick_pool.submit(_ctx.run, _process_job, job))
+            try:
                 for f in concurrent.futures.as_completed(_futures, timeout=600):
                     try:
                         _results.append(f.result())
                     except Exception as exc:
                         logger.error("Parallel cron job future failed: %s", exc)
                         _results.append(False)
+            except concurrent.futures.TimeoutError:
+                logger.error(
+                    "Parallel cron job batch timed out after 600 s; "
+                    "%d/%d result(s) collected — jobs still running will "
+                    "call mark_job_run in their own threads",
+                    len(_results), len(_futures),
+                )
+            # Futures have all completed on the normal path; on the timeout
+            # path, cancel_futures=False lets still-running jobs finish.
+            _tick_pool.shutdown(wait=False, cancel_futures=False)
 
         # Best-effort sweep of MCP stdio subprocesses that survived their
         # session teardown during this tick.  Runs AFTER every job has

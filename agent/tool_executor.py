@@ -283,6 +283,7 @@ def execute_tool_calls_concurrent(agent, assistant_message, messages: list, effe
             if block_result is None
         ]
         futures = []
+        _future_to_name: dict = {}
         if runnable_calls:
             max_workers = min(len(runnable_calls), _MAX_TOOL_WORKERS)
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -291,6 +292,7 @@ def execute_tool_calls_concurrent(agent, assistant_message, messages: list, effe
                     ctx = contextvars.copy_context()
                     f = executor.submit(ctx.run, _run_tool, i, tc, name, args)
                     futures.append(f)
+                    _future_to_name[f] = name
 
                 # Wait for all to complete with periodic heartbeats so the
                 # gateway's inactivity monitor doesn't kill us during long
@@ -299,6 +301,7 @@ def execute_tool_calls_concurrent(agent, assistant_message, messages: list, effe
                 # or a new message during concurrent tool execution.
                 _conc_start = time.time()
                 _interrupt_logged = False
+                _last_heartbeat = 0
                 while True:
                     done, not_done = concurrent.futures.wait(
                         futures, timeout=5.0,
@@ -327,12 +330,14 @@ def execute_tool_calls_concurrent(agent, assistant_message, messages: list, effe
                         break
 
                     _conc_elapsed = int(time.time() - _conc_start)
-                    # Heartbeat every ~30s (6 × 5s poll intervals)
-                    if _conc_elapsed > 0 and _conc_elapsed % 30 < 6:
+                    # Heartbeat every 30s — track last-fire time so the
+                    # condition fires exactly once per interval, not in pairs.
+                    if _conc_elapsed - _last_heartbeat >= 30:
+                        _last_heartbeat = _conc_elapsed
                         _still_running = [
-                            parsed_calls[futures.index(f)][1]
+                            _future_to_name[f]
                             for f in not_done
-                            if f in futures
+                            if f in _future_to_name
                         ]
                         agent._touch_activity(
                             f"concurrent tools running ({_conc_elapsed}s, "
@@ -873,7 +878,7 @@ def execute_tool_calls_sequential(agent, assistant_message, messages: list, effe
                 print(f"  ✅ Tool {i} completed in {tool_duration:.2f}s")
                 print(agent._wrap_verbose("Result: ", function_result))
             else:
-                _fr_str = function_result if isinstance(function_result, str) else str(function_result)
+                _fr_str = _multimodal_text_summary(function_result) if _is_multimodal_tool_result(function_result) else (function_result if isinstance(function_result, str) else str(function_result))
                 response_preview = _fr_str[:agent.log_prefix_chars] + "..." if len(_fr_str) > agent.log_prefix_chars else _fr_str
                 print(f"  ✅ Tool {i} completed in {tool_duration:.2f}s - {response_preview}")
 

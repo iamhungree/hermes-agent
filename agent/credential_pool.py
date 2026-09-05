@@ -401,7 +401,8 @@ class CredentialPool:
 
     def has_available(self) -> bool:
         """True if at least one entry is not currently in exhaustion cooldown."""
-        return bool(self._available_entries())
+        with self._lock:
+            return bool(self._available_entries())
 
     def entries(self) -> List[PooledCredential]:
         return list(self._entries)
@@ -944,7 +945,7 @@ class CredentialPool:
                                             "relogin_required": True,
                                             "at": datetime.now(timezone.utc).isoformat(),
                                         }
-                                        _save_provider_state(auth_store, "xai-oauth", state)
+                                        _store_provider_state(auth_store, "xai-oauth", state, set_active=False)
                                         _save_auth_store(auth_store)
                     except Exception as clear_exc:
                         logger.debug(
@@ -1010,7 +1011,7 @@ class CredentialPool:
                                             "relogin_required": True,
                                             "at": datetime.now(timezone.utc).isoformat(),
                                         }
-                                        _save_provider_state(auth_store, "openai-codex", state)
+                                        _store_provider_state(auth_store, "openai-codex", state, set_active=False)
                                         _save_auth_store(auth_store)
                     except Exception as clear_exc:
                         logger.debug(
@@ -1070,7 +1071,7 @@ class CredentialPool:
                                     exc,
                                     reason="credential_pool_refresh_failure",
                                 )
-                                _save_provider_state(auth_store, "nous", state)
+                                _store_provider_state(auth_store, "nous", state, set_active=False)
                                 _save_auth_store(auth_store)
                     except Exception as clear_exc:
                         logger.debug("Failed to clear terminal Nous OAuth state: %s", clear_exc)
@@ -1233,6 +1234,7 @@ class CredentialPool:
             # Increment usage counter so subsequent selections distribute load
             updated = replace(entry, request_count=entry.request_count + 1)
             self._replace_entry(entry, updated)
+            self._persist()
             self._current_id = entry.id
             return updated
 
@@ -1250,11 +1252,12 @@ class CredentialPool:
         return entry
 
     def peek(self) -> Optional[PooledCredential]:
-        current = self.current()
-        if current is not None:
-            return current
-        available = self._available_entries()
-        return available[0] if available else None
+        with self._lock:
+            current = self.current()
+            if current is not None:
+                return current
+            available = self._available_entries()
+            return available[0] if available else None
 
     def mark_exhausted_and_rotate(
         self,
@@ -1333,41 +1336,43 @@ class CredentialPool:
         return refreshed
 
     def reset_statuses(self) -> int:
-        count = 0
-        new_entries = []
-        for entry in self._entries:
-            if entry.last_status or entry.last_status_at or entry.last_error_code:
-                new_entries.append(
-                    replace(
-                        entry,
-                        last_status=None,
-                        last_status_at=None,
-                        last_error_code=None,
-                        last_error_reason=None,
-                        last_error_message=None,
-                        last_error_reset_at=None,
+        with self._lock:
+            count = 0
+            new_entries = []
+            for entry in self._entries:
+                if entry.last_status or entry.last_status_at or entry.last_error_code:
+                    new_entries.append(
+                        replace(
+                            entry,
+                            last_status=None,
+                            last_status_at=None,
+                            last_error_code=None,
+                            last_error_reason=None,
+                            last_error_message=None,
+                            last_error_reset_at=None,
+                        )
                     )
-                )
-                count += 1
-            else:
-                new_entries.append(entry)
-        if count:
-            self._entries = new_entries
-            self._persist()
-        return count
+                    count += 1
+                else:
+                    new_entries.append(entry)
+            if count:
+                self._entries = new_entries
+                self._persist()
+            return count
 
     def remove_index(self, index: int) -> Optional[PooledCredential]:
-        if index < 1 or index > len(self._entries):
-            return None
-        removed = self._entries.pop(index - 1)
-        self._entries = [
-            replace(entry, priority=new_priority)
-            for new_priority, entry in enumerate(self._entries)
-        ]
-        self._persist()
-        if self._current_id == removed.id:
-            self._current_id = None
-        return removed
+        with self._lock:
+            if index < 1 or index > len(self._entries):
+                return None
+            removed = self._entries.pop(index - 1)
+            self._entries = [
+                replace(entry, priority=new_priority)
+                for new_priority, entry in enumerate(self._entries)
+            ]
+            self._persist()
+            if self._current_id == removed.id:
+                self._current_id = None
+            return removed
 
     def resolve_target(self, target: Any) -> Tuple[Optional[int], Optional[PooledCredential], Optional[str]]:
         raw = str(target or "").strip()
@@ -1395,10 +1400,11 @@ class CredentialPool:
         return None, None, f'No credential matching "{raw}".'
 
     def add_entry(self, entry: PooledCredential) -> PooledCredential:
-        entry = replace(entry, priority=_next_priority(self._entries))
-        self._entries.append(entry)
-        self._persist()
-        return entry
+        with self._lock:
+            entry = replace(entry, priority=_next_priority(self._entries))
+            self._entries.append(entry)
+            self._persist()
+            return entry
 
 
 def _upsert_entry(entries: List[PooledCredential], provider: str, source: str, payload: Dict[str, Any]) -> bool:

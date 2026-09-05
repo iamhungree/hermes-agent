@@ -18,8 +18,16 @@ REFERENCE_PATTERN = re.compile(
     rf"(?<![\w/])@(?:(?P<simple>diff|staged)\b|(?P<kind>file|folder|git|url):(?P<value>{_QUOTED_REFERENCE_VALUE}(?::\d+(?:-\d+)?)?|\S+))"
 )
 TRAILING_PUNCTUATION = ",.;!?"
-_SENSITIVE_HOME_DIRS = (".ssh", ".aws", ".gnupg", ".kube", ".docker", ".azure", ".config/gh")
-_SENSITIVE_HERMES_DIRS = (Path("skills") / ".hub",)
+_SENSITIVE_HOME_DIRS = (".ssh", ".aws", ".gnupg", ".kube", ".docker", ".azure", ".config/gh", ".config/gcloud")
+_SENSITIVE_HERMES_DIRS = (Path("skills") / ".hub", Path("mcp-tokens"))
+_SENSITIVE_HERMES_FILES = (
+    Path("auth.json"),
+    Path("auth.lock"),
+    Path("config.yaml"),
+    Path("webhook_subscriptions.json"),
+    Path("auth") / "google_oauth.json",
+    Path(".anthropic_oauth.json"),
+)
 _SENSITIVE_HOME_FILES = (
     Path(".ssh") / "authorized_keys",
     Path(".ssh") / "id_rsa",
@@ -346,6 +354,7 @@ def _ensure_reference_path_allowed(path: Path) -> None:
 
     blocked_exact = {home / rel for rel in _SENSITIVE_HOME_FILES}
     blocked_exact.add(hermes_home / ".env")
+    blocked_exact.update(hermes_home / rel for rel in _SENSITIVE_HERMES_FILES)
     blocked_dirs = [home / rel for rel in _SENSITIVE_HOME_DIRS]
     blocked_dirs.extend(hermes_home / rel for rel in _SENSITIVE_HERMES_DIRS)
 
@@ -428,7 +437,10 @@ def _is_binary_file(path: Path) -> bool:
 
 
 def _build_folder_listing(path: Path, cwd: Path, limit: int = 200) -> str:
-    lines = [f"{path.relative_to(cwd)}/"]
+    try:
+        lines = [f"{path.relative_to(cwd)}/"]
+    except ValueError:
+        lines = [f"{path}/"]
     entries = _iter_visible_entries(path, cwd, limit=limit)
     for entry in entries:
         rel = entry.relative_to(cwd)
@@ -483,7 +495,7 @@ def _rg_files(path: Path, cwd: Path, limit: int) -> list[Path] | None:
             text=True,
             timeout=10,
         )
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired, ValueError):
         return None
     if result.returncode != 0:
         return None

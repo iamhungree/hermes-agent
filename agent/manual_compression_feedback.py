@@ -14,7 +14,7 @@ def summarize_manual_compression(
     """Return consistent user-facing feedback for manual compression."""
     before_count = len(before_messages)
     after_count = len(after_messages)
-    noop = list(after_messages) == list(before_messages)
+    noop = after_messages == before_messages
 
     if noop:
         headline = f"No changes from compression: {before_count} messages"

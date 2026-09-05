@@ -222,7 +222,6 @@ _CONTEXT_OVERFLOW_PATTERNS = [
     "超过最大长度",
     "上下文长度",
     # AWS Bedrock Converse API error patterns
-    "input is too long",
     "max input token",
     "input token",
     "exceeds the maximum number of input tokens",
@@ -292,11 +291,6 @@ _AUTH_PATTERNS = [
     "token expired",
     "token revoked",
     "access denied",
-]
-
-# Anthropic thinking block signature patterns
-_THINKING_SIG_PATTERNS = [
-    "signature",  # Combined with "thinking" check
 ]
 
 # Message-string patterns that indicate a provider-side timeout even when
@@ -785,6 +779,10 @@ def _classify_by_status(
     if status_code in {503, 529}:
         return result_fn(FailoverReason.overloaded, retryable=True)
 
+    if status_code == 408:
+        # Request Timeout — transient; the provider dropped a slow request.
+        return result_fn(FailoverReason.timeout, retryable=True)
+
     # Other 4xx — non-retryable
     if 400 <= status_code < 500:
         return result_fn(
@@ -914,7 +912,7 @@ def _classify_400(
         # Responses API (and some providers) use flat body: {"message": "..."}
         if not err_body_msg:
             err_body_msg = str(body.get("message") or "").strip().lower()
-    is_generic = len(err_body_msg) < 30 or err_body_msg in {"error", ""}
+    is_generic = len(err_body_msg) < 30
     # Absolute token/message-count thresholds are only a proxy for smaller
     # context windows.  Large-context sessions can have many messages while
     # still being far below their actual token budget.

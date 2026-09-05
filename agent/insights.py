@@ -24,19 +24,10 @@ from typing import Any, Dict, List
 
 from agent.usage_pricing import (
     CanonicalUsage,
-    DEFAULT_PRICING,
     estimate_usage_cost,
     format_duration_compact,
     has_known_pricing,
 )
-
-_DEFAULT_PRICING = DEFAULT_PRICING
-
-
-def _has_known_pricing(model_name: str, provider: str = None, base_url: str = None) -> bool:
-    """Check if a model has known pricing (vs unknown/custom endpoint)."""
-    return has_known_pricing(model_name, provider=provider, base_url=base_url)
-
 
 def _estimate_cost(
     session_or_model: Dict[str, Any] | str,
@@ -435,7 +426,7 @@ class InsightsEngine:
                 included_cost_sessions += 1
             elif status == "unknown":
                 unknown_cost_sessions += 1
-            if _has_known_pricing(model, s.get("billing_provider"), s.get("billing_base_url")):
+            if has_known_pricing(model, provider=s.get("billing_provider"), base_url=s.get("billing_base_url")):
                 models_with_pricing.add(display)
             else:
                 models_without_pricing.add(display)
@@ -508,8 +499,12 @@ class InsightsEngine:
             d["tool_calls"] += s.get("tool_call_count") or 0
             estimate, status = _estimate_cost(s)
             d["cost"] += estimate
-            d["has_pricing"] = _has_known_pricing(model, s.get("billing_provider"), s.get("billing_base_url"))
-            d["cost_status"] = status
+            if has_known_pricing(model, provider=s.get("billing_provider"), base_url=s.get("billing_base_url")):
+                d["has_pricing"] = True
+            elif "has_pricing" not in d:
+                d["has_pricing"] = False
+            if d.get("cost_status") in (None, "unknown"):
+                d["cost_status"] = status
 
         result = [
             {"model": model, **data}
@@ -609,11 +604,17 @@ class InsightsEngine:
         hour_counts = Counter()
         daily_counts = Counter()  # date string -> count
 
+        try:
+            from hermes_time import get_timezone as _get_tz
+            _tz = _get_tz()
+        except Exception:
+            _tz = None
+
         for s in sessions:
             ts = s.get("started_at")
             if not ts:
                 continue
-            dt = datetime.fromtimestamp(ts)
+            dt = datetime.fromtimestamp(ts, tz=_tz)
             day_counts[dt.weekday()] += 1
             hour_counts[dt.hour] += 1
             daily_counts[dt.strftime("%Y-%m-%d")] += 1
@@ -639,16 +640,16 @@ class InsightsEngine:
         # Streak calculation
         if daily_counts:
             all_dates = sorted(daily_counts.keys())
-            current_streak = 1
+            streak = 1
             max_streak = 1
             for i in range(1, len(all_dates)):
                 d1 = datetime.strptime(all_dates[i - 1], "%Y-%m-%d")
                 d2 = datetime.strptime(all_dates[i], "%Y-%m-%d")
                 if (d2 - d1).days == 1:
-                    current_streak += 1
-                    max_streak = max(max_streak, current_streak)
+                    streak += 1
+                    max_streak = max(max_streak, streak)
                 else:
-                    current_streak = 1
+                    streak = 1
         else:
             max_streak = 0
 
@@ -669,6 +670,7 @@ class InsightsEngine:
         sessions_with_duration = [
             s for s in sessions
             if s.get("started_at") and s.get("ended_at")
+            and s["ended_at"] > s["started_at"]
         ]
         if sessions_with_duration:
             longest = max(
@@ -742,7 +744,7 @@ class InsightsEngine:
         period_label = f"Last {days} days"
         if src_filter:
             period_label += f" ({src_filter})"
-        padding = 58 - len(period_label) - 2
+        padding = max(0, 58 - len(period_label) - 2)
         left_pad = padding // 2
         right_pad = padding - left_pad
         lines.append(f"  ║{' ' * left_pad} {period_label} {' ' * right_pad}║")

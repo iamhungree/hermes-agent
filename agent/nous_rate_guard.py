@@ -12,6 +12,7 @@ it before subsequent attempts, we eliminate the amplification effect.
 
 from __future__ import annotations
 
+import email.utils
 import json
 import logging
 import os
@@ -63,6 +64,13 @@ def _parse_reset_seconds(headers: Optional[Mapping[str, str]]) -> Optional[float
                 if val > 0:
                     return val
             except (TypeError, ValueError):
+                pass
+            try:
+                parsed = email.utils.parsedate_to_datetime(raw)
+                delta = parsed.timestamp() - time.time()
+                if delta > 0:
+                    return delta
+            except Exception:
                 pass
 
     return None
@@ -116,12 +124,20 @@ def record_nous_rate_limit(
 
         # Atomic write: write to temp file + rename
         fd, tmp_path = tempfile.mkstemp(dir=state_dir, suffix=".tmp")
+        _fd_taken = False
         try:
-            with os.fdopen(fd, "w") as f:
+            f = os.fdopen(fd, "w")
+            _fd_taken = True
+            with f:
                 json.dump(state, f)
             atomic_replace(tmp_path, path)
         except Exception:
-            # Clean up temp file on failure
+            # Close raw fd only if os.fdopen never took ownership.
+            if not _fd_taken:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
             try:
                 os.unlink(tmp_path)
             except OSError:
@@ -133,7 +149,7 @@ def record_nous_rate_limit(
             reset_at - now, reset_at,
         )
     except Exception as exc:
-        logger.debug("Failed to write Nous rate limit state: %s", exc)
+        logger.warning("Failed to write Nous rate limit state: %s", exc)
 
 
 def nous_rate_limit_remaining() -> Optional[float]:

@@ -84,14 +84,14 @@ def tool_progress_hint_gateway() -> str:
     return (
         "💡 First-time tip — that tool took a while and I'm streaming every step. "
         "If the progress messages feel noisy, send `/verbose` to cycle modes "
-        "(all → new → off). This notice won't appear again."
+        "(off → new → all → verbose). This notice won't appear again."
     )
 
 
 def tool_progress_hint_cli() -> str:
     return (
         "(tip) That tool ran for a while. Use /verbose to cycle tool-progress "
-        "display modes (all -> new -> off -> verbose). This tip only shows once."
+        "display modes (off -> new -> all -> verbose). This tip only shows once."
     )
 
 

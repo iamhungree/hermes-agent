@@ -402,7 +402,10 @@ class ResponseStore:
             (time.time(), response_id),
         )
         self._conn.commit()
-        return json.loads(row[0])
+        try:
+            return json.loads(row[0])
+        except json.JSONDecodeError:
+            return None
 
     def put(self, response_id: str, data: Dict[str, Any]) -> None:
         """Store a response, evicting the oldest if at capacity."""
@@ -654,6 +657,12 @@ except ImportError:
     _cron_pause = None
     _cron_resume = None
     _cron_trigger = None
+
+_scan_cron_prompt = None
+try:
+    from tools.cronjob_tools import _scan_cron_prompt
+except ImportError:
+    pass
 
 
 class APIServerAdapter(BasePlatformAdapter):
@@ -952,8 +961,12 @@ class APIServerAdapter(BasePlatformAdapter):
 
         Returns gateway state, connected platforms, PID, and uptime so the
         dashboard can display full status without needing a shared PID file or
-        /proc access.  No authentication required.
+        /proc access.  Requires auth when an API key is configured so that PID,
+        platform topology, and agent state are not readable by unauthenticated callers.
         """
+        auth_err = self._check_auth(request)
+        if auth_err:
+            return auth_err
         from gateway.status import read_runtime_status
 
         runtime = read_runtime_status() or {}
@@ -1063,7 +1076,7 @@ class APIServerAdapter(BasePlatformAdapter):
         messages = body.get("messages")
         if not messages or not isinstance(messages, list):
             return web.json_response(
-                {"error": {"message": "Missing or invalid 'messages' field", "type": "invalid_request_error"}},
+                _openai_error("Missing or invalid 'messages' field", param="messages"),
                 status=400,
             )
 
@@ -1277,7 +1290,7 @@ class APIServerAdapter(BasePlatformAdapter):
             except Exception as e:
                 logger.error("Error running agent for chat completions: %s", e, exc_info=True)
                 return web.json_response(
-                    _openai_error(f"Internal server error: {e}", err_type="server_error"),
+                    _openai_error("Internal server error", err_type="server_error"),
                     status=500,
                 )
         else:
@@ -1286,7 +1299,7 @@ class APIServerAdapter(BasePlatformAdapter):
             except Exception as e:
                 logger.error("Error running agent for chat completions: %s", e, exc_info=True)
                 return web.json_response(
-                    _openai_error(f"Internal server error: {e}", err_type="server_error"),
+                    _openai_error("Internal server error", err_type="server_error"),
                     status=500,
                 )
 
@@ -1466,17 +1479,19 @@ class APIServerAdapter(BasePlatformAdapter):
 
             # Get usage from completed agent
             usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+            _agent_failed = False
             try:
                 result, agent_usage = await agent_task
                 usage = agent_usage or usage
             except Exception as exc:
                 logger.warning("Agent task %s failed, usage data lost: %s", completion_id, exc)
+                _agent_failed = True
 
             # Finish chunk
             finish_chunk = {
                 "id": completion_id, "object": "chat.completion.chunk",
                 "created": created, "model": model,
-                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "error" if _agent_failed else "stop"}],
                 "usage": {
                     "prompt_tokens": usage.get("input_tokens", 0),
                     "completion_tokens": usage.get("output_tokens", 0),
@@ -2326,7 +2341,7 @@ class APIServerAdapter(BasePlatformAdapter):
             except Exception as e:
                 logger.error("Error running agent for responses: %s", e, exc_info=True)
                 return web.json_response(
-                    _openai_error(f"Internal server error: {e}", err_type="server_error"),
+                    _openai_error("Internal server error", err_type="server_error"),
                     status=500,
                 )
         else:
@@ -2335,7 +2350,7 @@ class APIServerAdapter(BasePlatformAdapter):
             except Exception as e:
                 logger.error("Error running agent for responses: %s", e, exc_info=True)
                 return web.json_response(
-                    _openai_error(f"Internal server error: {e}", err_type="server_error"),
+                    _openai_error("Internal server error", err_type="server_error"),
                     status=500,
                 )
 
@@ -2503,6 +2518,14 @@ class APIServerAdapter(BasePlatformAdapter):
                 return web.json_response(
                     {"error": f"Prompt must be ≤ {self._MAX_PROMPT_LENGTH} characters"}, status=400,
                 )
+            if _scan_cron_prompt is None:
+                return web.json_response(
+                    {"error": "Cron prompt scanner unavailable; cannot create job safely"},
+                    status=503,
+                )
+            scan_error = _scan_cron_prompt(prompt)
+            if scan_error:
+                return web.json_response({"error": scan_error}, status=400)
             if repeat is not None and (not isinstance(repeat, int) or repeat < 1):
                 return web.json_response({"error": "Repeat must be a positive integer"}, status=400)
 
@@ -2567,6 +2590,15 @@ class APIServerAdapter(BasePlatformAdapter):
                 return web.json_response(
                     {"error": f"Prompt must be ≤ {self._MAX_PROMPT_LENGTH} characters"}, status=400,
                 )
+            if "prompt" in sanitized:
+                if _scan_cron_prompt is None:
+                    return web.json_response(
+                        {"error": "Cron prompt scanner unavailable; cannot update prompt safely"},
+                        status=503,
+                    )
+                scan_error = _scan_cron_prompt(sanitized["prompt"])
+                if scan_error:
+                    return web.json_response({"error": scan_error}, status=400)
             job = _cron_update(job_id, sanitized)
             if not job:
                 return web.json_response({"error": "Job not found"}, status=404)
@@ -2966,6 +2998,18 @@ class APIServerAdapter(BasePlatformAdapter):
                     conversation_history.append({"role": msg["role"], "content": str(content)})
 
         run_id = f"run_{uuid.uuid4().hex}"
+        # Security: a caller-supplied session_id loads prior conversation history
+        # from state.db.  Gate this behind API key authentication, same as the
+        # X-Hermes-Session-Id gate in /v1/chat/completions, so unauthenticated
+        # clients cannot enumerate/hijack sessions.
+        if body.get("session_id") and not self._api_key:
+            return web.json_response(
+                _openai_error(
+                    "Session continuation requires API key authentication. "
+                    "Configure API_SERVER_KEY to enable this feature."
+                ),
+                status=403,
+            )
         session_id = body.get("session_id") or stored_session_id or run_id
         approval_session_key = gateway_session_key or session_id or run_id
         ephemeral_system_prompt = instructions
@@ -3508,6 +3552,14 @@ class APIServerAdapter(BasePlatformAdapter):
                     "unauthorized access to sessions, responses, and cron jobs.",
                     self.name,
                 )
+                if "*" in self._cors_origins:
+                    logger.warning(
+                        "[%s] ⚠️  CORS wildcard ('*') is set with no API key. "
+                        "Any browser origin can reach agent endpoints including terminal "
+                        "execution and cron jobs. Set API_SERVER_KEY or restrict "
+                        "API_SERVER_CORS_ORIGINS to trusted origins.",
+                        self.name,
+                    )
             logger.info(
                 "[%s] API server listening on http://%s:%d (model: %s)",
                 self.name, self._host, self._port, self._model_name,
