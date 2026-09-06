@@ -51,14 +51,61 @@ _CONTEXT_INVISIBLE_CHARS = {
     '\u202a', '\u202b', '\u202c', '\u202d', '\u202e',
 }
 
+# Code-point ranges that identify emoji characters. Used to distinguish ZWJ
+# inside a legitimate emoji sequence (\ud83d\udc68\u200d\ud83d\udcbb, \ud83c\udff3\ufe0f\u200d\ud83c\udf08, family emoji, \u2026) from a
+# lone ZWJ used for injection.  Mirrors the same logic in cronjob_tools.py.
+_EMOJI_CP_RANGES = (
+    (0x1F000, 0x1FFFF),
+    (0x2600, 0x27BF),
+    (0x2300, 0x23FF),
+    (0x1F1E6, 0x1F1FF),
+    (0x20E3, 0x20E3),
+)
+_VS16_CP = 0xFE0F  # Variation Selector-16 (emoji presentation)
+
+
+def _is_emoji_cp(cp: int) -> bool:
+    return any(lo <= cp <= hi for lo, hi in _EMOJI_CP_RANGES)
+
+
+def _zwj_in_emoji_sequence(text: str, idx: int) -> bool:
+    """Return True when the ZWJ at text[idx] is flanked by emoji codepoints."""
+    left = idx - 1
+    while left >= 0 and ord(text[left]) == _VS16_CP:
+        left -= 1
+    right = idx + 1
+    while right < len(text) and ord(text[right]) == _VS16_CP:
+        right += 1
+    return (
+        left >= 0 and right < len(text)
+        and _is_emoji_cp(ord(text[left]))
+        and _is_emoji_cp(ord(text[right]))
+    )
+
+
+def _strip_emoji_zwj(content: str) -> str:
+    """Remove ZWJ characters that are part of legitimate emoji sequences."""
+    if '\u200d' not in content:
+        return content
+    out: list[str] = []
+    for i, ch in enumerate(content):
+        if ch == '\u200d' and _zwj_in_emoji_sequence(content, i):
+            continue
+        out.append(ch)
+    return ''.join(out)
+
 
 def _scan_context_content(content: str, filename: str) -> str:
     """Scan context file content for injection. Returns sanitized content."""
     findings = []
 
+    # Strip legitimate emoji ZWJ sequences before scanning so that common
+    # emoji like \ud83d\udc68\u200d\ud83d\udcbb or \ud83c\udff3\ufe0f\u200d\ud83c\udf08 do not trigger a false-positive block.
+    content_for_scan = _strip_emoji_zwj(content)
+
     # Check invisible unicode
     for char in _CONTEXT_INVISIBLE_CHARS:
-        if char in content:
+        if char in content_for_scan:
             findings.append(f"invisible unicode U+{ord(char):04X}")
 
     # Check threat patterns

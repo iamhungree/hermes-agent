@@ -77,16 +77,18 @@ class _BackgroundLoop:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
         self._ready = threading.Event()
+        self._start_lock = threading.Lock()
 
     def start(self) -> None:
-        if self._thread is not None:
-            return
-        self._thread = threading.Thread(
-            target=self._run_forever,
-            name="hermes-lsp-loop",
-            daemon=True,
-        )
-        self._thread.start()
+        with self._start_lock:
+            if self._thread is not None:
+                return
+            self._thread = threading.Thread(
+                target=self._run_forever,
+                name="hermes-lsp-loop",
+                daemon=True,
+            )
+            self._thread.start()
         self._ready.wait(timeout=5.0)
 
     def _run_forever(self) -> None:
@@ -108,11 +110,12 @@ class _BackgroundLoop:
         Returns the coroutine's result, or raises its exception.
         """
         from agent.async_utils import safe_schedule_threadsafe
-        if self._loop is None:
+        loop = self._loop  # capture once to avoid TOCTOU with stop()
+        if loop is None:
             if asyncio.iscoroutine(coro):
                 coro.close()
             raise RuntimeError("background loop not started")
-        fut = safe_schedule_threadsafe(coro, self._loop)
+        fut = safe_schedule_threadsafe(coro, loop)
         if fut is None:
             raise RuntimeError("background loop not running")
         try:
