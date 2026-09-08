@@ -204,7 +204,7 @@ def setup_logging(
 
     level_name = (log_level or cfg_level or "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
-    max_bytes = (max_size_mb or cfg_max_size or 5) * 1024 * 1024
+    max_bytes = (max_size_mb if max_size_mb is not None else (cfg_max_size or 5)) * 1024 * 1024
     backups = backup_count or cfg_backup or 3
 
     # Lazy import to avoid circular dependency at module load time.

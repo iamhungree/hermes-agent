@@ -61,7 +61,7 @@ def _parse_reset_seconds(headers: Optional[Mapping[str, str]]) -> Optional[float
         if raw is not None:
             try:
                 val = float(raw)
-                if val > 0:
+                if val >= 0:
                     return val
             except (TypeError, ValueError):
                 pass

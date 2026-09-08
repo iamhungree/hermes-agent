@@ -442,9 +442,16 @@ def _build_folder_listing(path: Path, cwd: Path, limit: int = 200) -> str:
     except ValueError:
         lines = [f"{path}/"]
     entries = _iter_visible_entries(path, cwd, limit=limit)
+    try:
+        path_parts_len = len(path.relative_to(cwd).parts)
+    except ValueError:
+        path_parts_len = len(path.parts)
     for entry in entries:
-        rel = entry.relative_to(cwd)
-        indent = "  " * max(len(rel.parts) - len(path.relative_to(cwd).parts) - 1, 0)
+        try:
+            rel = entry.relative_to(cwd)
+        except ValueError:
+            rel = entry
+        indent = "  " * max(len(rel.parts) - path_parts_len - 1, 0)
         if entry.is_dir():
             lines.append(f"{indent}- {entry.name}/")
         else:
