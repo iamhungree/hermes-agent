@@ -813,8 +813,7 @@ def prompt_dangerous_approval(command: str, description: str,
                 print(t("approval.allowed_always"))
                 return "always"
             else:
-                print(t("approval.denied"))
-                return "deny"
+                continue
 
     except (EOFError, KeyboardInterrupt):
         print("\n" + t("approval.cancelled"))

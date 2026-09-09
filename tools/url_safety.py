@@ -165,8 +165,8 @@ def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
         return True
     if ip.is_multicast or ip.is_unspecified:
         return True
-    # CGNAT range not covered by is_private
-    if ip in _CGNAT_NETWORK:
+    # CGNAT range not covered by is_private (IPv4-only; IPv6 check would TypeError)
+    if isinstance(ip, ipaddress.IPv4Address) and ip in _CGNAT_NETWORK:
         return True
     return False
 
