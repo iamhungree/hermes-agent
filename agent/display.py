@@ -1028,7 +1028,8 @@ def get_cute_tool_message(
         return _wrap(f"┊ 🔀 delegate  {_trunc(args.get('goal', ''), 35)}  {dur}")
 
     preview = build_tool_preview(tool_name, args) or ""
-    return _wrap(f"┊ ⚡ {tool_name[:9]:9} {_trunc(preview, 35)}  {dur}")
+    short_name = (tool_name[:6] + "...") if len(tool_name) > 9 else tool_name
+    return _wrap(f"┊ ⚡ {short_name:9} {_trunc(preview, 35)}  {dur}")
 
 
 # =========================================================================

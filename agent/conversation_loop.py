@@ -1360,6 +1360,7 @@ def run_conversation(
                         if agent._interrupt_requested:
                             agent._vprint(f"{agent.log_prefix}⚡ Interrupt detected during retry wait, aborting.", force=True)
                             agent._persist_session(messages, conversation_history)
+                            agent._cleanup_task_resources(effective_task_id)
                             agent.clear_interrupt()
                             return {
                                 "final_response": f"Operation interrupted during retry ({_failure_hint}, attempt {retry_count}/{max_retries}).",

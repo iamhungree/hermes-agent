@@ -136,6 +136,8 @@ class PooledCredential:
         data["extra"] = extra
         data.setdefault("id", uuid.uuid4().hex[:6])
         data.setdefault("label", payload.get("source", provider))
+        if data.get("label") is None:
+            data["label"] = payload.get("source", provider)
         data.setdefault("auth_type", AUTH_TYPE_API_KEY)
         data.setdefault("priority", 0)
         data.setdefault("source", SOURCE_MANUAL)

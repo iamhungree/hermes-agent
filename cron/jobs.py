@@ -359,6 +359,10 @@ def compute_next_run(schedule: Dict[str, Any], last_run_at: Optional[str] = None
     """
     now = _hermes_now()
 
+    if "kind" not in schedule:
+        logger.warning("compute_next_run: job missing 'kind' field, skipping: %r", schedule.get("name", "?"))
+        return None
+
     if schedule["kind"] == "once":
         return _recoverable_oneshot_run_at(schedule, now, last_run_at=last_run_at)
 

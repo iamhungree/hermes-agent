@@ -12,6 +12,7 @@ that the main retry loop in run_agent.py consults for every API failure.
 from __future__ import annotations
 
 import enum
+import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
@@ -445,7 +446,6 @@ def classify_api_error(
                 _raw_json = _metadata.get("raw") or ""
                 if isinstance(_raw_json, str) and _raw_json.strip():
                     try:
-                        import json
                         _inner = json.loads(_raw_json)
                         if isinstance(_inner, dict):
                             _inner_err = _inner.get("error", {})
