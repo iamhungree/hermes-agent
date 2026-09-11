@@ -578,6 +578,7 @@ class ContextCompressor(ContextEngine):
 
         self.last_prompt_tokens = 0
         self.last_completion_tokens = 0
+        self.last_total_tokens = 0
 
         self.summary_model = summary_model_override or ""
 

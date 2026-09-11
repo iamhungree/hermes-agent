@@ -110,7 +110,7 @@ def _scan_context_content(content: str, filename: str) -> str:
 
     # Check threat patterns
     for pattern, pid in _CONTEXT_THREAT_PATTERNS:
-        if re.search(pattern, content, re.IGNORECASE):
+        if re.search(pattern, content_for_scan, re.IGNORECASE):
             findings.append(pid)
 
     if findings:

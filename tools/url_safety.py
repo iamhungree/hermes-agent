@@ -28,6 +28,7 @@ import logging
 import os
 import socket
 import threading
+import time
 from urllib.parse import urlparse
 
 from utils import is_truthy_value
@@ -85,9 +86,14 @@ _CGNAT_NETWORK = ipaddress.ip_network("100.64.0.0/10")
 # Global toggle: allow private/internal IP resolution
 # ---------------------------------------------------------------------------
 # Cached after first read so we don't hit the filesystem on every URL check.
+# Cache expires after _ALLOW_PRIVATE_CACHE_TTL seconds so a config change that
+# revokes ``allow_private_urls: true`` takes effect within one minute without
+# requiring a full gateway restart.
 _allow_private_resolved = False
 _cached_allow_private: bool = False
 _allow_private_lock = threading.Lock()
+_allow_private_cache_until: float = 0.0
+_ALLOW_PRIVATE_CACHE_TTL = 60.0  # seconds
 
 
 def _global_allow_private_urls() -> bool:
@@ -98,14 +104,16 @@ def _global_allow_private_urls() -> bool:
     2. ``security.allow_private_urls`` in config.yaml
     3. ``browser.allow_private_urls`` in config.yaml  (legacy / backward compat)
 
-    Result is cached for the process lifetime.
+    Result is cached for _ALLOW_PRIVATE_CACHE_TTL seconds so config changes
+    take effect without a process restart.
     """
-    global _allow_private_resolved, _cached_allow_private
-    if _allow_private_resolved:
+    global _allow_private_resolved, _cached_allow_private, _allow_private_cache_until
+    now = time.monotonic()
+    if _allow_private_resolved and now < _allow_private_cache_until:
         return _cached_allow_private
 
     with _allow_private_lock:
-        if _allow_private_resolved:
+        if _allow_private_resolved and now < _allow_private_cache_until:
             return _cached_allow_private
 
         result = False  # safe default
@@ -138,15 +146,17 @@ def _global_allow_private_urls() -> bool:
 
         _cached_allow_private = result
         _allow_private_resolved = True
+        _allow_private_cache_until = now + _ALLOW_PRIVATE_CACHE_TTL
         return _cached_allow_private
 
 
 def _reset_allow_private_cache() -> None:
     """Reset the cached toggle — only for tests."""
-    global _allow_private_resolved, _cached_allow_private
+    global _allow_private_resolved, _cached_allow_private, _allow_private_cache_until
     with _allow_private_lock:
         _allow_private_resolved = False
         _cached_allow_private = False
+        _allow_private_cache_until = 0.0
 
 
 def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:

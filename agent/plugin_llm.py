@@ -837,6 +837,7 @@ class PluginLlm:
         purpose: Optional[str] = None,
     ) -> PluginLlmCompleteResult:
         """Async sibling of :meth:`complete`."""
+        _check_messages_for_unsafe_urls(messages)
         policy = self._policy_loader(self._plugin_id)
         eff_provider, eff_model, eff_agent, eff_profile = _check_overrides(
             policy,
