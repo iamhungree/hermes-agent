@@ -395,6 +395,8 @@ class SessionDB:
             try:
                 _do_checkpoint = False
                 with self._lock:
+                    if self._conn is None:
+                        raise sqlite3.OperationalError("database connection is closed")
                     self._conn.execute("BEGIN IMMEDIATE")
                     try:
                         result = fn(self._conn)

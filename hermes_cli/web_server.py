@@ -3690,7 +3690,7 @@ def _normalise_prefix(raw: Optional[str]) -> str:
     if not p.startswith("/"):
         p = "/" + p
     p = p.rstrip("/")
-    if "//" in p or ".." in p or any(c in p for c in ('"', "'", "<", ">", " ", "\n", "\r", "\t")):
+    if "//" in p or ".." in p or any(c in p for c in ('"', "'", "<", ">", " ", "\n", "\r", "\t", "\\")):
         return ""
     if len(p) > 64:
         return ""

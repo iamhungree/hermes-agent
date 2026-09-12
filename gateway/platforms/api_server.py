@@ -3526,7 +3526,12 @@ class APIServerAdapter(BasePlatformAdapter):
                         )
                         return False
                 except ImportError:
-                    pass
+                    logger.warning(
+                        "[%s] Cannot verify API_SERVER_KEY quality (auth module "
+                        "unavailable). Ensure API_SERVER_KEY is a strong secret "
+                        "before exposing the server on %s.",
+                        self.name, self._host,
+                    )
 
             # Port conflict detection — fail fast if port is already in use
             try:
