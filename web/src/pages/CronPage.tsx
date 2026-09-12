@@ -88,12 +88,12 @@ function profileLabel(profile: string): string {
   return profile === "default" ? "default" : profile;
 }
 
-const STATUS_TONE: Record<string, "success" | "warning" | "destructive"> = {
+const STATUS_TONE: Record<string, "success" | "warning" | "destructive" | "secondary"> = {
   enabled: "success",
   scheduled: "success",
   paused: "warning",
   error: "destructive",
-  completed: "destructive",
+  completed: "secondary",
 };
 
 export default function CronPage() {
@@ -117,15 +117,15 @@ export default function CronPage() {
   });
   const [deliver, setDeliver] = useState("local");
   const [creating, setCreating] = useState(false);
-  const createProfile = selectedProfile === "all" ? "default" : selectedProfile;
+  const [newJobProfile, setNewJobProfile] = useState("default");
 
   const loadJobs = useCallback(() => {
     api
       .getCronJobs(selectedProfile)
       .then(setJobs)
-      .catch(() => showToast(t.common.loading, "error"))
+      .catch(() => showToast(t.status.failed, "error"))
       .finally(() => setLoading(false));
-  }, [selectedProfile, showToast, t.common.loading]);
+  }, [selectedProfile, showToast, t.status.failed]);
 
   useEffect(() => {
     api
@@ -152,9 +152,9 @@ export default function CronPage() {
           name: name.trim() || undefined,
           deliver,
         },
-        createProfile,
+        newJobProfile,
       );
-      showToast(t.common.create + " ✓", "success");
+      showToast(t.cron.newJob + " ✓", "success");
       setPrompt("");
       setSchedule("");
       setName("");
@@ -231,7 +231,10 @@ export default function CronPage() {
       <Button
         className="uppercase"
         size="sm"
-        onClick={() => setCreateModalOpen(true)}
+        onClick={() => {
+          setNewJobProfile(selectedProfile === "all" ? "default" : selectedProfile);
+          setCreateModalOpen(true);
+        }}
       >
         {t.common.create}
       </Button>,
@@ -239,7 +242,7 @@ export default function CronPage() {
     return () => {
       setEnd(null);
     };
-  }, [setEnd, t.common.create, loading]);
+  }, [setEnd, t.common.create, loading, selectedProfile, setNewJobProfile]);
 
   if (loading) {
     return (
@@ -308,8 +311,8 @@ export default function CronPage() {
                 <Label htmlFor="cron-profile">Profile</Label>
                 <Select
                   id="cron-profile"
-                  value={createProfile}
-                  onValueChange={(v) => setSelectedProfile(v)}
+                  value={newJobProfile}
+                  onValueChange={(v) => setNewJobProfile(v)}
                 >
                   {profiles.map((profile) => (
                     <SelectOption key={profile.name} value={profile.name}>
@@ -323,7 +326,6 @@ export default function CronPage() {
                 <Label htmlFor="cron-name">{t.cron.nameOptional}</Label>
                 <Input
                   id="cron-name"
-                  autoFocus
                   placeholder={t.cron.namePlaceholder}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -334,6 +336,7 @@ export default function CronPage() {
                 <Label htmlFor="cron-prompt">{t.cron.prompt}</Label>
                 <textarea
                   id="cron-prompt"
+                  autoFocus
                   className="flex min-h-[80px] w-full border border-border bg-background/40 px-3 py-2 text-sm font-courier shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/30 focus-visible:border-foreground/25"
                   placeholder={t.cron.promptPlaceholder}
                   value={prompt}

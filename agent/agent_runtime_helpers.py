@@ -229,7 +229,7 @@ def sanitize_tool_call_arguments(
     messages: list,
     *,
     logger=None,
-    session_id: str = None,
+    session_id: Optional[str] = None,
 ) -> int:
     """Repair corrupted assistant tool-call argument JSON in-place."""
     log = logger or logging.getLogger(__name__)
@@ -2066,7 +2066,7 @@ def extract_api_error_context(error: Exception) -> Dict[str, Any]:
     if "reset_at" not in context:
         message = context.get("message") or ""
         if isinstance(message, str):
-            delay_match = re.search(r"quotaResetDelay[:\s\"]+(\\d+(?:\\.\\d+)?)(ms|s)", message, re.IGNORECASE)
+            delay_match = re.search(r"quotaResetDelay[:\s\"]+(\d+(?:\.\d+)?)(ms|s)", message, re.IGNORECASE)
             if delay_match:
                 value = float(delay_match.group(1))
                 seconds = value / 1000.0 if delay_match.group(2).lower() == "ms" else value

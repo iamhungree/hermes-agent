@@ -521,9 +521,9 @@ export default function SessionsPage() {
         setSessions(resp.sessions);
         setTotal(resp.total);
       })
-      .catch(() => {})
+      .catch(() => showToast(t.status.failed, "error"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [showToast, t.status.failed]);
 
   useEffect(() => {
     loadSessions(page);

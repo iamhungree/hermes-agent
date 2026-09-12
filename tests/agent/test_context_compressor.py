@@ -175,9 +175,10 @@ class TestNonStringContent:
 
         with patch("agent.context_compressor.call_llm", return_value=mock_response):
             summary = c._generate_summary(messages)
-        # None content → empty string → standardized compaction handoff prefix added
-        assert summary is not None
-        assert summary == SUMMARY_PREFIX
+        # None/empty LLM content is treated as a compression failure (returns None)
+        # so the caller can trigger the fallback path rather than dropping turns
+        # without a meaningful summary.
+        assert summary is None
 
     def test_summary_call_does_not_force_temperature(self):
         mock_response = MagicMock()

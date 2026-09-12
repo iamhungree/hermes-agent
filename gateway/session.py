@@ -710,8 +710,8 @@ class SessionStore:
                     for key, entry_data in data.items():
                         try:
                             self._entries[key] = SessionEntry.from_dict(entry_data)
-                        except (ValueError, KeyError):
-                            # Skip entries with unknown/removed platform values
+                        except (ValueError, KeyError, TypeError):
+                            # Skip entries with unknown/removed platform values or null timestamps
                             continue
             except Exception as e:
                 print(f"[gateway] Warning: Failed to load sessions: {e}")
@@ -957,7 +957,7 @@ class SessionStore:
     def update_session(
         self,
         session_key: str,
-        last_prompt_tokens: int = None,
+        last_prompt_tokens: Optional[int] = None,
     ) -> None:
         """Update lightweight session metadata after an interaction."""
         with self._lock:

@@ -35,25 +35,6 @@ _SENSITIVE_QUERY_PARAMS = frozenset({
     "x-amz-signature",
 })
 
-# Sensitive form-urlencoded / JSON body key names (case-insensitive exact match).
-# Exact match, NOT substring — "token_count" and "session_id" must NOT match.
-# Ported from nearai/ironclaw#2529.
-_SENSITIVE_BODY_KEYS = frozenset({
-    "access_token",
-    "refresh_token",
-    "id_token",
-    "token",
-    "api_key",
-    "apikey",
-    "client_secret",
-    "password",
-    "auth",
-    "jwt",
-    "secret",
-    "private_key",
-    "authorization",
-    "key",
-})
 
 # Snapshot at import time so runtime env mutations (e.g. LLM-generated
 # `export HERMES_REDACT_SECRETS=false`) cannot disable redaction
@@ -331,7 +312,7 @@ def redact_sensitive_text(text: str, *, force: bool = False, code_file: bool = F
     """Apply all redaction patterns to a block of text.
 
     Safe to call on any string -- non-matching text passes through unchanged.
-    Disabled by default — enable via security.redact_secrets: true in config.yaml.
+    Enabled by default — disable via security.redact_secrets: false in config.yaml.
     Set force=True for safety boundaries that must never return raw secrets
     regardless of the user's global logging redaction preference.
 
@@ -350,7 +331,7 @@ def redact_sensitive_text(text: str, *, force: bool = False, code_file: bool = F
     match.
     """
     if text is None:
-        return None
+        return ""
     if not isinstance(text, str):
         text = str(text)
     if not text:

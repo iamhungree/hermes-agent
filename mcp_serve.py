@@ -29,6 +29,7 @@ MCP client config (e.g. claude_desktop_config.json):
 
 from __future__ import annotations
 
+import collections
 import json
 import logging
 import os
@@ -169,16 +170,26 @@ def _extract_attachments(msg: dict) -> List[dict]:
                 url = part.get("url", part.get("source", {}).get("url", ""))
                 if url:
                     attachments.append({"type": "image", "url": url})
-            elif ptype not in {"text",}:
+            elif ptype not in {"text"}:
                 # Unknown non-text content type
                 attachments.append({"type": ptype, "data": part})
 
     # MEDIA: tags in text content
     text = _extract_message_content(msg)
     if text:
+        try:
+            from gateway.platforms.base import validate_media_delivery_path
+        except ImportError:
+            validate_media_delivery_path = None
         media_pattern = re.compile(r'MEDIA:\s*(\S+)')
         for match in media_pattern.finditer(text):
             path = match.group(1)
+            if validate_media_delivery_path is None:
+                continue  # fail-closed: skip paths when validator is unavailable
+            safe_path = validate_media_delivery_path(path)
+            if not safe_path:
+                continue
+            path = safe_path
             attachments.append({"type": "media", "path": path})
 
     return attachments
@@ -210,7 +221,7 @@ class EventBridge:
     """
 
     def __init__(self):
-        self._queue: List[QueueEvent] = []
+        self._queue: collections.deque = collections.deque(maxlen=QUEUE_LIMIT)
         self._cursor = 0
         self._lock = threading.Lock()
         self._new_event = threading.Event()
@@ -275,6 +286,9 @@ class EventBridge:
         deadline = time.monotonic() + (timeout_ms / 1000.0)
 
         while time.monotonic() < deadline:
+            # Clear before the locked check so a signal fired between the
+            # unlock and wait() is not lost (classic lost-wakeup prevention).
+            self._new_event.clear()
             with self._lock:
                 for e in self._queue:
                     if e.cursor > after_cursor and (
@@ -288,7 +302,6 @@ class EventBridge:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break
-            self._new_event.clear()
             self._new_event.wait(timeout=min(remaining, POLL_INTERVAL))
 
         return None
@@ -323,10 +336,7 @@ class EventBridge:
         with self._lock:
             self._cursor += 1
             event.cursor = self._cursor
-            self._queue.append(event)
-            # Trim queue to limit
-            while len(self._queue) > QUEUE_LIMIT:
-                self._queue.pop(0)
+            self._queue.append(event)  # deque(maxlen=QUEUE_LIMIT) auto-trims oldest
         self._new_event.set()
 
     def _poll_loop(self):
@@ -356,10 +366,6 @@ class EventBridge:
         except OSError:
             sj_mtime = 0.0
 
-        if sj_mtime != self._sessions_json_mtime:
-            self._sessions_json_mtime = sj_mtime
-            self._cached_sessions_index = _load_sessions_index()
-
         # Check if state.db has changed
         try:
             from hermes_constants import get_hermes_home
@@ -375,8 +381,27 @@ class EventBridge:
         if db_mtime == self._state_db_mtime and sj_mtime == self._sessions_json_mtime:
             return  # Nothing changed since last poll — skip entirely
 
+        if sj_mtime != self._sessions_json_mtime:
+            self._sessions_json_mtime = sj_mtime
+            self._cached_sessions_index = _load_sessions_index()
+
         self._state_db_mtime = db_mtime
         entries = self._cached_sessions_index
+
+        def _ts_float(ts) -> float:
+            if isinstance(ts, (int, float)):
+                return float(ts)
+            if isinstance(ts, str) and ts:
+                try:
+                    return float(ts)
+                except ValueError:
+                    # ISO string — parse to epoch
+                    try:
+                        from datetime import datetime
+                        return datetime.fromisoformat(ts).timestamp()
+                    except Exception:
+                        return 0.0
+            return 0.0
 
         for session_key, entry in entries.items():
             session_id = entry.get("session_id", "")
@@ -392,22 +417,6 @@ class EventBridge:
 
             if not messages:
                 continue
-
-            # Normalize timestamps to float for comparison
-            def _ts_float(ts) -> float:
-                if isinstance(ts, (int, float)):
-                    return float(ts)
-                if isinstance(ts, str) and ts:
-                    try:
-                        return float(ts)
-                    except ValueError:
-                        # ISO string — parse to epoch
-                        try:
-                            from datetime import datetime
-                            return datetime.fromisoformat(ts).timestamp()
-                        except Exception:
-                            return 0.0
-                return 0.0
 
             # Find messages newer than our last seen timestamp
             new_messages = []
@@ -429,7 +438,7 @@ class EventBridge:
                     session_key=session_key,
                     data={
                         "role": msg.get("role", ""),
-                        "content": content[:500],
+                        "content": content[:497] + "…" if len(content) > 500 else content,
                         "timestamp": str(msg.get("timestamp", "")),
                         "message_id": str(msg.get("id", "")),
                     },
@@ -464,7 +473,10 @@ def create_mcp_server(event_bridge: Optional[EventBridge] = None) -> "FastMCP":
         ),
     )
 
-    bridge = event_bridge or EventBridge()
+    bridge = event_bridge
+    if bridge is None:
+        bridge = EventBridge()
+        bridge.start()
 
     # -- conversations_list ------------------------------------------------
 
@@ -597,10 +609,11 @@ def create_mcp_server(event_bridge: Optional[EventBridge] = None) -> "FastMCP":
             if role in {"user", "assistant"}:
                 content = _extract_message_content(msg)
                 if content:
+                    truncated = len(content) > 2000
                     filtered.append({
                         "id": str(msg.get("id", "")),
                         "role": role,
-                        "content": content[:2000],
+                        "content": content[:2000] + (" …[truncated]" if truncated else ""),
                         "timestamp": msg.get("timestamp", ""),
                     })
 

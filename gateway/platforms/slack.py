@@ -527,6 +527,12 @@ class SlackAdapter(BasePlatformAdapter):
 
         # Support comma-separated bot tokens for multi-workspace
         bot_tokens = [t.strip() for t in raw_token.split(",") if t.strip()]
+        if not bot_tokens:
+            # Guard against SLACK_BOT_TOKEN=","/" " passing the truthiness
+            # check above but yielding no usable tokens, which would crash
+            # bot_tokens[0] below with an uncaught IndexError.
+            logger.error("[Slack] SLACK_BOT_TOKEN did not yield any usable tokens")
+            return False
 
         # Also load tokens from OAuth token file
         from hermes_constants import get_hermes_home

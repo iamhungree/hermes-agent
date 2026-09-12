@@ -243,6 +243,7 @@ class ProcessRegistry:
                         # exactly one notification when the process actually ends.
                         session.notify_on_complete = True
                         should_disable = True
+                        _suppressed_snapshot = session._watch_suppressed
                 return_early = True
             else:
                 # Case 2: cooldown has expired.
@@ -274,7 +275,7 @@ class ProcessRegistry:
                     "session_key": session.session_key,
                     "command": session.command,
                     "type": "watch_disabled",
-                    "suppressed": session._watch_suppressed,
+                    "suppressed": _suppressed_snapshot,
                     "platform": session.watcher_platform,
                     "chat_id": session.watcher_chat_id,
                     "user_id": session.watcher_user_id,
@@ -568,12 +569,12 @@ class ProcessRegistry:
                     name=f"proc-pty-reader-{session.id}",
                 )
                 session._reader_thread = reader
-                reader.start()
 
                 with self._lock:
                     self._prune_if_needed()
                     self._running[session.id] = session
 
+                reader.start()
                 self._write_checkpoint()
                 return session
 
@@ -619,12 +620,12 @@ class ProcessRegistry:
                 name=f"proc-reader-{session.id}",
             )
             session._reader_thread = reader
-            reader.start()
 
             with self._lock:
                 self._prune_if_needed()
                 self._running[session.id] = session
 
+            reader.start()
             self._write_checkpoint()
         except Exception:
             # Post-Popen setup failed — kill the orphaned subprocess (and any
@@ -710,21 +711,23 @@ class ProcessRegistry:
             session.exit_code = -1
             session.output_buffer = f"Failed to start: {e}"
 
+        poller = None
         if not session.exited:
             # Start a poller thread that periodically reads the log file
-            reader = threading.Thread(
+            poller = threading.Thread(
                 target=self._env_poller_loop,
                 args=(session, env, log_path, pid_path, exit_path),
                 daemon=True,
                 name=f"proc-poller-{session.id}",
             )
-            session._reader_thread = reader
-            reader.start()
+            session._reader_thread = poller
 
         with self._lock:
             self._prune_if_needed()
             self._running[session.id] = session
 
+        if poller is not None:
+            poller.start()
         self._write_checkpoint()
         return session
 
@@ -754,8 +757,9 @@ class ProcessRegistry:
                 session.process.wait(timeout=5)
             except Exception as e:
                 logger.debug("Process wait timed out or failed: %s", e)
-            session.exited = True
-            session.exit_code = session.process.returncode
+            with session._lock:
+                session.exited = True
+                session.exit_code = session.process.returncode
             self._move_to_finished(session)
 
     def _env_poller_loop(
@@ -797,17 +801,20 @@ class ProcessRegistry:
                     )
                     exit_str = exit_result.get("output", "").strip()
                     try:
-                        session.exit_code = int(exit_str.splitlines()[-1].strip())
+                        exit_code = int(exit_str.splitlines()[-1].strip())
                     except (ValueError, IndexError):
-                        session.exit_code = -1
-                    session.exited = True
+                        exit_code = -1
+                    with session._lock:
+                        session.exit_code = exit_code
+                        session.exited = True
                     self._move_to_finished(session)
                     return
 
             except Exception:
                 # Environment might be gone (sandbox reaped, etc.)
-                session.exited = True
-                session.exit_code = -1
+                with session._lock:
+                    session.exit_code = -1
+                    session.exited = True
                 self._move_to_finished(session)
                 return
 
@@ -838,8 +845,9 @@ class ProcessRegistry:
             pty.wait()
         except Exception as e:
             logger.debug("PTY wait timed out or failed: %s", e)
-        session.exited = True
-        session.exit_code = pty.exitstatus if hasattr(pty, 'exitstatus') else -1
+        with session._lock:
+            session.exited = True
+            session.exit_code = pty.exitstatus if hasattr(pty, 'exitstatus') else -1
         self._move_to_finished(session)
 
     def _move_to_finished(self, session: ProcessSession):
@@ -1173,8 +1181,9 @@ class ProcessRegistry:
                         "its original runtime handle is no longer available"
                     ),
                 }
-            session.exited = True
-            session.exit_code = -15  # SIGTERM
+            with session._lock:
+                session.exited = True
+                session.exit_code = -15  # SIGTERM
             self._move_to_finished(session)
             self._write_checkpoint()
             return {"status": "killed", "session_id": session.id}

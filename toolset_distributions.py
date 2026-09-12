@@ -19,9 +19,12 @@ Usage:
     all_dists = list_distributions()
 """
 
-from typing import Dict, List, Optional
+import logging
+from typing import Any, Dict, List, Optional
 import random
 from toolsets import validate_toolset
+
+logger = logging.getLogger(__name__)
 
 
 # Distribution definitions
@@ -45,11 +48,11 @@ DISTRIBUTIONS = {
     "image_gen": {
         "description": "Heavy focus on image generation with vision and web support",
         "toolsets": {
-            "image_gen": 90,  # 80% chance of image generation tools
-            "vision": 90,      # 60% chance of vision tools
-            "web": 55,         # 40% chance of web tools
+            "image_gen": 90,  # 90% chance of image generation tools
+            "vision": 90,      # 90% chance of vision tools
+            "web": 55,         # 55% chance of web tools
             "terminal": 45,
-            "moa": 10          # 20% chance of reasoning tools
+            "moa": 10          # 10% chance of reasoning tools
         }
     },
     
@@ -198,10 +201,10 @@ DISTRIBUTIONS = {
         "toolsets": {
             "terminal": 97,   # 97% - terminal almost always available
             "file": 97,       # 97% - file tools almost always available
-            "web": 97,        # 15% - web search/scrape for documentation
-            "browser": 75,    # 10% - browser occasionally for web interaction
-            "vision": 50,      # 8% - vision analysis rarely
-            "image_gen": 10    # 3% - image generation very rarely
+            "web": 97,        # 97% - web search/scrape for documentation
+            "browser": 75,    # 75% - browser occasionally for web interaction
+            "vision": 50,      # 50% - vision analysis occasionally
+            "image_gen": 10    # 10% - image generation very rarely
         }
     },
     
@@ -220,7 +223,7 @@ DISTRIBUTIONS = {
 }
 
 
-def get_distribution(name: str) -> Optional[Dict[str, any]]:
+def get_distribution(name: str) -> Optional[Dict[str, Any]]:
     """
     Get a toolset distribution by name.
     
@@ -270,7 +273,7 @@ def sample_toolsets_from_distribution(distribution_name: str) -> List[str]:
     for toolset_name, probability in dist["toolsets"].items():
         # Validate toolset exists
         if not validate_toolset(toolset_name):
-            print(f"⚠️  Warning: Toolset '{toolset_name}' in distribution '{distribution_name}' is not valid")
+            logger.warning("Toolset '%s' in distribution '%s' is not valid", toolset_name, distribution_name)
             continue
         
         # Roll the dice - if random value is less than probability, include this toolset

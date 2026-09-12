@@ -124,7 +124,8 @@ def get_provider(name: str) -> Optional[TTSProvider]:
     """
     if not isinstance(name, str):
         return None
-    return _providers.get(name.strip().lower())
+    with _lock:
+        return _providers.get(name.strip().lower())
 
 
 def _reset_for_tests() -> None:

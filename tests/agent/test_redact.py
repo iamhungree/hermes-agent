@@ -162,8 +162,8 @@ class TestPassthrough:
     def test_empty_string(self):
         assert redact_sensitive_text("") == ""
 
-    def test_none_returns_none(self):
-        assert redact_sensitive_text(None) is None
+    def test_none_returns_empty_string(self):
+        assert redact_sensitive_text(None) == ""
 
     def test_non_string_input_int_coerced(self):
         assert redact_sensitive_text(12345) == "12345"

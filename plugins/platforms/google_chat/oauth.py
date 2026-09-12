@@ -382,6 +382,7 @@ def install_deps() -> bool:
         subprocess.check_call(
             [sys.executable, "-m", "pip", "install", "--quiet"] + _REQUIRED_PACKAGES,
             stdout=subprocess.DEVNULL,
+            timeout=120,
         )
         print("Dependencies installed.")
         return True

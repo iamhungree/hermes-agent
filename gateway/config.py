@@ -1411,6 +1411,7 @@ def _apply_env_overrides(config: GatewayConfig) -> None:
         config.platforms[Platform.EMAIL].enabled = True
         config.platforms[Platform.EMAIL].extra.update({
             "address": email_addr,
+            "password": email_pwd,
             "imap_host": email_imap,
             "smtp_host": email_smtp,
         })

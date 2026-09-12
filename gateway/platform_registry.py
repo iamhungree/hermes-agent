@@ -218,7 +218,12 @@ class PlatformRegistry:
         if entry is None:
             return None
 
-        if not entry.check_fn():
+        try:
+            deps_ok = entry.check_fn()
+        except Exception as e:
+            logger.warning("Platform '%s' dependency probe raised: %s", entry.label, e)
+            return None
+        if not deps_ok:
             hint = f" ({entry.install_hint})" if entry.install_hint else ""
             logger.warning(
                 "Platform '%s' requirements not met%s",

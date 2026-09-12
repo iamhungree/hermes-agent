@@ -618,7 +618,7 @@ class GitHubSource(SkillSource):
             else:
                 logger.debug("Skipped file (fetch failed): %s/%s", repo, item_path)
 
-        return files if files else None
+        return files
 
     def _download_directory_recursive(self, repo: str, path: str) -> Dict[str, str]:
         """Recursively download via Contents API (fallback)."""
@@ -2000,7 +2000,16 @@ class ClawHubSource(SkillSource):
         file_list = version_data.get("files")
 
         if isinstance(file_list, dict):
-            return {k: v for k, v in file_list.items() if isinstance(v, str)}
+            for k, v in file_list.items():
+                if not isinstance(k, str) or not isinstance(v, str):
+                    continue
+                try:
+                    safe_k = _validate_bundle_rel_path(k)
+                except ValueError:
+                    logger.debug("Skipping unsafe API file path: %s", k)
+                    continue
+                files[safe_k] = v
+            return files
 
         if not isinstance(file_list, list):
             return files
@@ -2013,16 +2022,22 @@ class ClawHubSource(SkillSource):
             if not fname or not isinstance(fname, str):
                 continue
 
+            try:
+                safe_fname = _validate_bundle_rel_path(fname)
+            except ValueError:
+                logger.debug("Skipping unsafe API file path: %s", fname)
+                continue
+
             inline_content = file_meta.get("content")
             if isinstance(inline_content, str):
-                files[fname] = inline_content
+                files[safe_fname] = inline_content
                 continue
 
             raw_url = file_meta.get("rawUrl") or file_meta.get("downloadUrl") or file_meta.get("url")
             if isinstance(raw_url, str) and raw_url.startswith("http"):
                 content = self._fetch_text(raw_url)
                 if content is not None:
-                    files[fname] = content
+                    files[safe_fname] = content
 
         return files
 
@@ -2039,7 +2054,7 @@ class ClawHubSource(SkillSource):
                     f"{self.BASE_URL}/download",
                     params={"slug": slug, "version": version},
                     timeout=30,
-                    follow_redirects=True,
+                    follow_redirects=False,
                 )
                 if resp.status_code == 429:
                     try:
@@ -2057,6 +2072,11 @@ class ClawHubSource(SkillSource):
                     logger.debug("ClawHub ZIP download for %s v%s returned %s", slug, version, resp.status_code)
                     return files
 
+                # Only extract text-sized files (skip large binaries).
+                # Use a bounded read — info.file_size is unverified
+                # central-directory metadata and cannot be trusted to
+                # cap the actual decompressed output.
+                _MAX_ENTRY_BYTES = 500_000
                 with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
                     for info in zf.infolist():
                         if info.is_dir():
@@ -2066,12 +2086,12 @@ class ClawHubSource(SkillSource):
                         except ValueError:
                             logger.debug("Skipping unsafe ZIP member path: %s", info.filename)
                             continue
-                        # Only extract text-sized files (skip large binaries)
-                        if info.file_size > 500_000:
-                            logger.debug("Skipping large file in ZIP: %s (%d bytes)", name, info.file_size)
-                            continue
                         try:
-                            raw = zf.read(info.filename)
+                            with zf.open(info.filename) as _entry_f:
+                                raw = _entry_f.read(_MAX_ENTRY_BYTES + 1)
+                            if len(raw) > _MAX_ENTRY_BYTES:
+                                logger.debug("Skipping oversized ZIP entry: %s", name)
+                                continue
                             files[name] = raw.decode("utf-8")
                         except (UnicodeDecodeError, KeyError):
                             logger.debug("Skipping non-text file in ZIP: %s", name)
@@ -2470,13 +2490,10 @@ class BrowseShSource(SkillSource):
         md_url = self._resolve_skill_md_url(slug, item)
         if not md_url:
             return None
-        try:
-            resp = httpx.get(md_url, timeout=20, follow_redirects=True)
-            if resp.status_code != 200:
-                return None
-            content = resp.text
-        except httpx.HTTPError:
+        resp = _guarded_http_get(md_url, timeout=20)
+        if resp is None or resp.status_code != 200:
             return None
+        content = resp.text
 
         meta = self._item_to_meta(item)
         name = meta.name if meta else slug.split("/")[-1]

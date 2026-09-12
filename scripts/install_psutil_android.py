@@ -83,7 +83,10 @@ def main() -> int:
         archive = tmp_path / "psutil.tar.gz"
         urllib.request.urlretrieve(PSUTIL_URL, archive)
         with tarfile.open(archive) as tar:
-            tar.extractall(tmp_path)
+            try:
+                tar.extractall(tmp_path, filter="data")  # type: ignore[call-arg]
+            except TypeError:
+                tar.extractall(tmp_path)
 
         try:
             src_root = next(

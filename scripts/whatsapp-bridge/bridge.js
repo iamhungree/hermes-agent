@@ -25,7 +25,7 @@ import pino from 'pino';
 import path from 'path';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, unlinkSync } from 'fs';
 import { randomBytes } from 'crypto';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { tmpdir } from 'os';
 import qrcode from 'qrcode-terminal';
 import { matchesAllowedUser, parseAllowedUsers } from './allowlist.js';
@@ -586,12 +586,19 @@ app.post('/send-media', async (req, res) => {
     return res.status(400).json({ error: 'chatId and filePath are required' });
   }
 
+  // Restrict file reads to known safe cache directories and the system temp dir.
+  const ALLOWED_DIRS = [IMAGE_CACHE_DIR, DOCUMENT_CACHE_DIR, AUDIO_CACHE_DIR, tmpdir()];
+  const resolvedPath = path.resolve(filePath);
+  if (!ALLOWED_DIRS.some(dir => resolvedPath.startsWith(path.resolve(dir) + path.sep))) {
+    return res.status(403).json({ error: 'filePath must be inside a permitted cache directory' });
+  }
+
   try {
-    if (!existsSync(filePath)) {
+    if (!existsSync(resolvedPath)) {
       return res.status(404).json({ error: `File not found: ${filePath}` });
     }
 
-    const buffer = readFileSync(filePath);
+    const buffer = readFileSync(resolvedPath);
     const ext = filePath.toLowerCase().split('.').pop();
     const type = mediaType || inferMediaType(ext);
     let msgPayload;
@@ -614,8 +621,9 @@ app.post('/send-media', async (req, res) => {
         if (needsConversion) {
           tmpPath = path.join(tmpdir(), `hermes_voice_${randomBytes(6).toString('hex')}.ogg`);
           try {
-            execSync(
-              `ffmpeg -y -i ${JSON.stringify(filePath)} -ar 48000 -ac 1 -c:a libopus ${JSON.stringify(tmpPath)}`,
+            execFileSync(
+              'ffmpeg',
+              ['-y', '-i', filePath, '-ar', '48000', '-ac', '1', '-c:a', 'libopus', tmpPath],
               { timeout: 30000, stdio: 'pipe' }
             );
             audioBuffer = readFileSync(tmpPath);

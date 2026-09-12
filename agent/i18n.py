@@ -110,11 +110,11 @@ def _normalize_lang(value: Any) -> str:
         return key
     if key in _LANGUAGE_ALIASES:
         return _LANGUAGE_ALIASES[key]
-    # Try stripping a region suffix (e.g. "pt-br" -> "pt" won't be supported,
-    # but "zh-CN" -> "zh" will).
+    # Try stripping a region suffix (e.g. "zh-CN" -> "zh", "pt-BR" -> "pt").
     base = key.split("-", 1)[0]
     if base in SUPPORTED_LANGUAGES:
         return base
+    logger.warning("Unsupported language %r — falling back to %r", value, DEFAULT_LANGUAGE)
     return DEFAULT_LANGUAGE
 
 
