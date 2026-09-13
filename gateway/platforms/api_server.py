@@ -483,7 +483,7 @@ class ResponseStore:
 
 _CORS_HEADERS = {
     "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization, Content-Type, Idempotency-Key",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type, Idempotency-Key, X-Hermes-Session-Id, X-Hermes-Session-Key",
 }
 
 
@@ -591,8 +591,7 @@ class _IdempotencyCache:
         if task is None:
             async def _compute_and_store():
                 resp = await compute_coro()
-                import time as _t
-                self._store[key] = {"resp": resp, "fp": fingerprint, "ts": _t.time()}
+                self._store[key] = {"resp": resp, "fp": fingerprint, "ts": time.time()}
                 self._purge()
                 return resp
 
@@ -1170,7 +1169,14 @@ class APIServerAdapter(BasePlatformAdapter):
             first_user = ""
             for cm in conversation_messages:
                 if cm.get("role") == "user":
-                    first_user = cm.get("content", "")
+                    content = cm.get("content", "")
+                    if isinstance(content, list):
+                        content = " ".join(
+                            part.get("text", "")
+                            for part in content
+                            if isinstance(part, dict) and part.get("type") == "text"
+                        )
+                    first_user = content
                     break
             session_id = _derive_chat_session_id(system_prompt, first_user)
             # history already set from request body above

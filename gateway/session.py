@@ -456,7 +456,7 @@ class SessionEntry:
     # Set when a session was created because the previous one expired;
     # consumed once by the message handler to inject a notice into context
     was_auto_reset: bool = False
-    auto_reset_reason: Optional[str] = None  # "idle" or "daily"
+    auto_reset_reason: Optional[str] = None  # "idle", "daily", or "suspended"
     reset_had_activity: bool = False  # whether the expired session had any messages
 
     # Set by reset_session() when the user explicitly sends /new or /reset.
