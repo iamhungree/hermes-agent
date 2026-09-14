@@ -1396,7 +1396,11 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
     # Pre-initialise so the finally block can always reference them safely,
     # even if an exception fires before the setup code below runs.
     _job_workdir = None
-    _prior_terminal_cwd = _CRON_CWD_SENTINEL
+    # Capture before the try block so an exception inside (e.g. Path.is_dir()
+    # raising a PermissionError) can never leave _prior_terminal_cwd as the
+    # sentinel while _job_workdir is truthy — which would cause the finally
+    # block to permanently delete TERMINAL_CWD from the environment.
+    _prior_terminal_cwd = os.environ.get("TERMINAL_CWD", _CRON_CWD_SENTINEL)
 
     try:
         for _var_name in _cron_delivery_vars:
@@ -1422,7 +1426,6 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
                 job_id, _job_workdir,
             )
             _job_workdir = None
-        _prior_terminal_cwd = os.environ.get("TERMINAL_CWD", _CRON_CWD_SENTINEL)
         if _job_workdir:
             os.environ["TERMINAL_CWD"] = _job_workdir
             logger.info("Job '%s': using workdir %s", job_id, _job_workdir)

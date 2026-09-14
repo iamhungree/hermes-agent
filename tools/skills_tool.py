@@ -1088,6 +1088,17 @@ def skill_view(
             if _injection_detected:
                 _warnings.append("skill content contains patterns that may indicate prompt injection")
             logging.getLogger(__name__).warning("Skill security warning for '%s': %s", name, "; ".join(_warnings))
+            if _outside_skills_dir:
+                return json.dumps(
+                    {
+                        "success": False,
+                        "error": (
+                            f"Skill '{name}' resolved to a path outside the trusted skills directory"
+                            " — access blocked for security."
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
 
         parsed_frontmatter: Dict[str, Any] = {}
         try:

@@ -572,6 +572,21 @@ def try_shrink_image_parts_in_messages(api_messages: list) -> bool:
             ptype = part.get("type")
             if ptype not in {"image_url", "input_image"}:
                 continue
+            if ptype == "input_image":
+                # Anthropic format: data lives at part["source"]["data"] as raw
+                # base64 (no data-URL wrapper).  Wrap it so _shrink_data_url can
+                # process it, then unwrap the result.
+                source = part.get("source") or {}
+                if isinstance(source, dict) and source.get("type") == "base64":
+                    raw_data = source.get("data", "")
+                    media_type = source.get("media_type", "image/png")
+                    url = f"data:{media_type};base64,{raw_data}"
+                    resized = _shrink_data_url(url)
+                    if resized:
+                        _, _, new_data = resized.partition(",")
+                        source["data"] = new_data
+                        changed_count += 1
+                continue
             image_value = part.get("image_url")
             # OpenAI chat.completions: {"image_url": {"url": "data:..."}}
             # OpenAI Responses: {"image_url": "data:..."}
