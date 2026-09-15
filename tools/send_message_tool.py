@@ -1458,7 +1458,8 @@ async def _send_matrix_via_adapter(pconfig, chat_id, message, media_files=None, 
         return _error(f"Matrix send failed: {e}")
     finally:
         try:
-            await adapter.disconnect()
+            if adapter is not None:
+                await adapter.disconnect()
         except Exception:
             pass
 

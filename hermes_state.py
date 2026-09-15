@@ -443,6 +443,8 @@ class SessionDB:
         """
         try:
             with self._lock:
+                if self._conn is None:
+                    return
                 result = self._conn.execute(
                     "PRAGMA wal_checkpoint(PASSIVE)"
                 ).fetchone()
