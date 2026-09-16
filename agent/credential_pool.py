@@ -1388,7 +1388,7 @@ class CredentialPool:
         label_matches = [
             (idx, entry)
             for idx, entry in enumerate(self._entries, start=1)
-            if entry.label.strip().lower() == raw.lower()
+            if (entry.label or "").strip().lower() == raw.lower()
         ]
         if len(label_matches) == 1:
             return label_matches[0][0], label_matches[0][1], None

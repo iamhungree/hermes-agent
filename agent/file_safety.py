@@ -46,6 +46,10 @@ def build_write_denied_paths(home: str) -> set[str]:
             # Top-level Anthropic PKCE credential store remains sensitive even
             # when a profile is active; default/non-profile sessions still read it.
             str(hermes_root / ".anthropic_oauth.json"),
+            # Claude Code OAuth credential store — refreshed by anthropic_adapter
+            # internally; blocking write_file/patch prevents prompt-injected overwrites.
+            os.path.join(home, ".claude", ".credentials.json"),
+            os.path.join(home, ".claude.json"),
             os.path.join(home, ".bashrc"),
             os.path.join(home, ".zshrc"),
             os.path.join(home, ".profile"),

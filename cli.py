@@ -284,7 +284,7 @@ def _parse_reasoning_config(effort: str) -> dict | None:
     from hermes_constants import parse_reasoning_effort
     result = parse_reasoning_effort(effort)
     if effort and effort.strip() and result is None:
-        logger.warning("Unknown reasoning_effort '%s', using default (medium)", effort)
+        logger.warning("Unknown reasoning_effort %r — valid values: %s. Ignoring; model default will be used.", effort, ", ".join(("none", "minimal", "low", "medium", "high", "xhigh")))
     return result
 
 
@@ -494,7 +494,7 @@ def load_cli_config() -> Dict[str, Any]:
             ):
                 defaults["agent"]["max_turns"] = file_config["max_turns"]
         except Exception as e:
-            logger.warning("Failed to load cli-config.yaml: %s", e)
+            logger.warning("Failed to load config from %s: %s", config_path, e)
 
     # Expand ${ENV_VAR} references in config values before bridging to env vars.
     from hermes_cli.config import _expand_env_vars
