@@ -40,6 +40,7 @@ from gateway.platforms.base import (
     SendResult,
     cache_document_from_bytes,
     cache_image_from_bytes,
+    validate_media_delivery_path,
 )
 from gateway.config import Platform, PlatformConfig
 
@@ -339,7 +340,7 @@ class EmailAdapter(BasePlatformAdapter):
 
         self._running = True
         self._poll_task = asyncio.create_task(self._poll_loop())
-        print(f"[Email] Connected as {self._address}")
+        logger.info("[Email] Connected as %s", self._address)
         return True
 
     async def disconnect(self) -> None:
@@ -615,10 +616,11 @@ class EmailAdapter(BasePlatformAdapter):
                 body_parts.append(alt_text)
             if image_url.startswith("file://"):
                 local_path = _unquote(image_url[7:])
-                if Path(local_path).exists():
-                    local_paths.append(local_path)
+                safe = validate_media_delivery_path(local_path)
+                if safe is not None:
+                    local_paths.append(safe)
                 else:
-                    logger.warning("[Email] Skipping missing image: %s", local_path)
+                    logger.warning("[Email] Skipping unsafe or missing image path: %s", local_path)
             else:
                 # Remote URLs just get linked in the body (parity with send_image)
                 body_parts.append(f"Image: {image_url}")
