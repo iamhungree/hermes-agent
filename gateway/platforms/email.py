@@ -472,7 +472,7 @@ class EmailAdapter(BasePlatformAdapter):
 
         # Build message text: include subject as context
         text = body
-        if subject and not subject.startswith("Re:"):
+        if subject and not subject.lower().startswith("re:"):
             text = f"[Subject: {subject}]\n\n{body}"
 
         # Determine message type and media
@@ -545,7 +545,7 @@ class EmailAdapter(BasePlatformAdapter):
         # Thread context for reply
         ctx = self._thread_context.get(to_addr, {})
         subject = ctx.get("subject", "Hermes Agent")
-        if not subject.startswith("Re:"):
+        if not subject.lower().startswith("re:"):
             subject = f"Re: {subject}"
         msg["Subject"] = subject
 
@@ -656,7 +656,7 @@ class EmailAdapter(BasePlatformAdapter):
 
         ctx = self._thread_context.get(to_addr, {})
         subject = ctx.get("subject", "Hermes Agent")
-        if not subject.startswith("Re:"):
+        if not subject.lower().startswith("re:"):
             subject = f"Re: {subject}"
         msg["Subject"] = subject
 
@@ -679,7 +679,7 @@ class EmailAdapter(BasePlatformAdapter):
                     part = MIMEBase("application", "octet-stream")
                     part.set_payload(f.read())
                     encoders.encode_base64(part)
-                    part.add_header("Content-Disposition", f"attachment; filename={p.name}")
+                    part.add_header("Content-Disposition", "attachment", filename=p.name)
                     msg.attach(part)
             except Exception as e:
                 logger.warning("[Email] Failed to attach %s: %s", file_path, e)
@@ -737,7 +737,7 @@ class EmailAdapter(BasePlatformAdapter):
 
         ctx = self._thread_context.get(to_addr, {})
         subject = ctx.get("subject", "Hermes Agent")
-        if not subject.startswith("Re:"):
+        if not subject.lower().startswith("re:"):
             subject = f"Re: {subject}"
         msg["Subject"] = subject
 
@@ -760,7 +760,7 @@ class EmailAdapter(BasePlatformAdapter):
             part = MIMEBase("application", "octet-stream")
             part.set_payload(f.read())
             encoders.encode_base64(part)
-            part.add_header("Content-Disposition", f"attachment; filename={fname}")
+            part.add_header("Content-Disposition", "attachment", filename=fname)
             msg.attach(part)
 
         smtp = smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=30)
