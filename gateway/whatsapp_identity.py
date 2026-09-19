@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections import deque
 from typing import Set
 
 logger = logging.getLogger(__name__)
@@ -84,10 +85,10 @@ def expand_whatsapp_aliases(identifier: str) -> Set[str]:
 
     session_dir = get_hermes_home() / "whatsapp" / "session"
     resolved: Set[str] = set()
-    queue = [normalized]
+    queue: deque[str] = deque([normalized])
 
     while queue:
-        current = queue.pop(0)
+        current = queue.popleft()
         if not current or current in resolved:
             continue
         # Defense-in-depth: reject identifiers that could sneak path

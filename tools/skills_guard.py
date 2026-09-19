@@ -27,7 +27,7 @@ import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 
 
@@ -643,7 +643,7 @@ def scan_skill(skill_path: Path, source: str = "community") -> ScanResult:
     )
 
 
-def should_allow_install(result: ScanResult, force: bool = False) -> Tuple[bool, str]:
+def should_allow_install(result: ScanResult, force: bool = False) -> Tuple[Optional[bool], str]:
     """
     Determine whether a skill should be installed based on scan result and trust.
 
@@ -833,7 +833,11 @@ def _check_structure(skill_dir: Path) -> List[Finding]:
             ))
 
         # Executable permission on non-script files
-        if ext not in {'.sh', '.bash', '.py', '.rb', '.pl'} and f.stat().st_mode & 0o111:
+        try:
+            _fmode = f.stat().st_mode
+        except OSError:
+            continue
+        if ext not in {'.sh', '.bash', '.py', '.rb', '.pl'} and _fmode & 0o111:
             findings.append(Finding(
                 pattern_id="unexpected_executable",
                 severity="medium",

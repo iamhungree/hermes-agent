@@ -132,7 +132,7 @@ class TestParseReasoningEffort:
         """The literal "none" disables reasoning explicitly."""
         assert parse_reasoning_effort("none") == {"enabled": False}
 
-    @pytest.mark.parametrize("level", list(VALID_REASONING_EFFORTS))
+    @pytest.mark.parametrize("level", [l for l in VALID_REASONING_EFFORTS if l != "none"])
     def test_each_valid_level(self, level):
         """Every level listed in VALID_REASONING_EFFORTS is accepted as-is."""
         assert parse_reasoning_effort(level) == {"enabled": True, "effort": level}

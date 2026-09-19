@@ -129,7 +129,8 @@ def _load_web_config() -> dict:
     try:
         from hermes_cli.config import load_config
         return load_config().get("web", {})
-    except (ImportError, Exception):
+    except Exception:
+        logger.debug("Could not load web config; using defaults", exc_info=True)
         return {}
 
 def _get_backend() -> str:
@@ -244,8 +245,6 @@ def _ddgs_package_importable() -> bool:
         return True
     except ImportError:
         return False
-
-# ─── Firecrawl Client ────────────────────────────────────────────────────────
 
 # ─── Firecrawl Client ────────────────────────────────────────────────────────
 # After PR #25182, the firecrawl client, lazy SDK proxy, dual-auth config
@@ -519,16 +518,16 @@ Create a markdown summary that captures all key information in a well-organized,
             if extra_body:
                 call_kwargs["extra_body"] = extra_body
             response = await async_call_llm(**call_kwargs)
-            content = extract_content_or_reasoning(response)
-            if content:
-                return content
+            llm_content = extract_content_or_reasoning(response)
+            if llm_content:
+                return llm_content
             # Reasoning-only / empty response — let the retry loop handle it
             logger.warning("LLM returned empty content (attempt %d/%d), retrying", attempt + 1, max_retries)
             if attempt < max_retries - 1:
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 60)
                 continue
-            return content  # Return whatever we got after exhausting retries
+            return None  # Exhausted retries with empty LLM response; let caller fall back
         except RuntimeError:
             logger.warning("No auxiliary model available for web content processing")
             return None
@@ -540,8 +539,8 @@ Create a markdown summary that captures all key information in a well-organized,
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 60)
             else:
-                raise last_error
-    
+                raise
+
     return None
 
 
@@ -1240,6 +1239,14 @@ async def web_crawl_tool(
             # Ensure URL has protocol
             if not url.startswith(('http://', 'https://')):
                 url = f'https://{url}'
+
+            # Block URLs containing embedded secrets (exfiltration prevention).
+            from agent.redact import _PREFIX_RE
+            from urllib.parse import unquote as _unquote
+            if _PREFIX_RE.search(url) or _PREFIX_RE.search(_unquote(url)):
+                return json.dumps({"results": [{"url": url, "title": "", "content": "",
+                    "error": "Blocked: URL contains what appears to be an API key or token. "
+                             "Secrets must not be sent in URLs."}]}, ensure_ascii=False)
 
             # SSRF protection — block private/internal addresses
             if not is_safe_url(url):

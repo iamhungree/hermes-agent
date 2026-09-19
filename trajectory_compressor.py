@@ -596,7 +596,7 @@ TURNS TO SUMMARIZE:
 
 Write only the summary, starting with "[CONTEXT SUMMARY]:" prefix."""
 
-        for attempt in range(self.config.max_retries):
+        for attempt in range(max(1, self.config.max_retries)):
             try:
                 metrics.summarization_api_calls += 1
                 summary_temperature = _effective_temperature_for_model(
@@ -665,7 +665,7 @@ TURNS TO SUMMARIZE:
 
 Write only the summary, starting with "[CONTEXT SUMMARY]:" prefix."""
 
-        for attempt in range(self.config.max_retries):
+        for attempt in range(max(1, self.config.max_retries)):
             try:
                 metrics.summarization_api_calls += 1
                 summary_temperature = _effective_temperature_for_model(
@@ -771,21 +771,16 @@ Write only the summary, starting with "[CONTEXT SUMMARY]:" prefix."""
         for i in range(compress_start, compress_end):
             accumulated_tokens += turn_tokens[i]
             compress_until = i + 1  # Exclusive end
-            
+
             # Check if we have enough savings
             if accumulated_tokens >= target_tokens_to_compress:
                 break
-        
-        # If we still don't have enough savings, compress the entire compressible region
-        if accumulated_tokens < target_tokens_to_compress and compress_until < compress_end:
-            compress_until = compress_end
-            accumulated_tokens = sum(turn_tokens[compress_start:compress_end])
-        
+
         # Record compression region
         metrics.turns_compressed_start_idx = compress_start
         metrics.turns_compressed_end_idx = compress_until
         metrics.turns_in_compressed_region = compress_until - compress_start
-        
+
         # Extract content for summary
         content_to_summarize = self._extract_turn_content_for_summary(
             trajectory, compress_start, compress_until
@@ -874,17 +869,12 @@ Write only the summary, starting with "[CONTEXT SUMMARY]:" prefix."""
             compress_until = i + 1
             if accumulated_tokens >= target_tokens_to_compress:
                 break
-        
-        # If we still don't have enough savings, compress the entire compressible region
-        if accumulated_tokens < target_tokens_to_compress and compress_until < compress_end:
-            compress_until = compress_end
-            accumulated_tokens = sum(turn_tokens[compress_start:compress_end])
-        
+
         # Record compression region
         metrics.turns_compressed_start_idx = compress_start
         metrics.turns_compressed_end_idx = compress_until
         metrics.turns_in_compressed_region = compress_until - compress_start
-        
+
         # Extract content for summary
         content_to_summarize = self._extract_turn_content_for_summary(
             trajectory, compress_start, compress_until
@@ -1344,9 +1334,9 @@ def main(
         compression_config = CompressionConfig()
     
     # Apply CLI overrides
-    if target_max_tokens:
+    if target_max_tokens is not None:
         compression_config.target_max_tokens = target_max_tokens
-    if tokenizer:
+    if tokenizer is not None:
         compression_config.tokenizer_name = tokenizer
     
     # Validate sample_percent

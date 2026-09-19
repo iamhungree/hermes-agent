@@ -53,6 +53,22 @@ def _translate_acp_cwd(cwd: str) -> str:
     return translated if translated is not None else cwd
 
 
+def _extract_preview_text(content: Any) -> str:
+    """Extract plain-text preview from a message's content field.
+
+    Handles both string content and multimodal list content (OpenAI format).
+    Falls back to empty string rather than rendering a raw Python list repr.
+    """
+    if isinstance(content, list):
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                text = str(part.get("text") or "").strip()
+                if text:
+                    return text
+        return ""
+    return str(content or "").strip()
+
+
 def _normalize_cwd_for_compare(cwd: str | None) -> str:
     raw = str(cwd or ".").strip()
     if not raw:
@@ -265,12 +281,14 @@ class SessionManager:
             cwd=cwd,
             model=original.model or None,
         )
+        with original.runtime_lock:
+            forked_history = copy.deepcopy(original.history)
         state = SessionState(
             session_id=new_id,
             agent=agent,
             cwd=cwd,
             model=getattr(agent, "model", original.model) or original.model,
-            history=copy.deepcopy(original.history),
+            history=forked_history,
             cancel_event=threading.Event(),
         )
         with self._lock:
@@ -306,9 +324,10 @@ class SessionManager:
                 persisted = persisted_rows.get(s.session_id, {})
                 preview = next(
                     (
-                        str(msg.get("content") or "").strip()
+                        _extract_preview_text(msg.get("content"))
                         for msg in s.history
-                        if msg.get("role") == "user" and str(msg.get("content") or "").strip()
+                        if msg.get("role") == "user"
+                        and _extract_preview_text(msg.get("content"))
                     ),
                     persisted.get("preview") or "",
                 )
@@ -360,7 +379,8 @@ class SessionManager:
         state = self.get_session(session_id)  # checks DB too
         if state is None:
             return None
-        state.cwd = cwd
+        with self._lock:
+            state.cwd = cwd
         _register_task_cwd(session_id, cwd)
         self._persist(state)
         return state

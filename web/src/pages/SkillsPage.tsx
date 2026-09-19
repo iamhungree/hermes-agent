@@ -111,7 +111,7 @@ export default function SkillsPage() {
         setSkills(s);
         setToolsets(tsets);
       })
-      .catch(() => showToast(t.common.loading, "error"))
+      .catch(() => showToast(t.status.failed, "error"))
       .finally(() => setLoading(false));
   }, []);
 
@@ -502,6 +502,7 @@ function SkillRow({
     <div className="group flex items-start gap-3 px-3 py-2.5 transition-colors hover:bg-muted/40">
       <div className="pt-0.5 shrink-0">
         <Switch
+          aria-label={skill.name}
           checked={skill.enabled}
           onCheckedChange={onToggle}
           disabled={toggling}

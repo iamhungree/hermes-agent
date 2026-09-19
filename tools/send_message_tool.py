@@ -1291,10 +1291,15 @@ async def _send_email(extra, chat_id, message):
         msg["Date"] = formatdate(localtime=True)
 
         server = smtplib.SMTP(smtp_host, smtp_port)
-        server.starttls(context=ssl.create_default_context())
-        server.login(address, password)
-        server.send_message(msg)
-        server.quit()
+        try:
+            server.starttls(context=ssl.create_default_context())
+            server.login(address, password)
+            server.send_message(msg)
+        finally:
+            try:
+                server.quit()
+            except Exception:
+                server.close()
         return {"success": True, "platform": "email", "chat_id": chat_id}
     except Exception as e:
         return _error(f"Email send failed: {e}")
@@ -1371,6 +1376,8 @@ async def _send_matrix(token, extra, chat_id, message):
         token = token or os.getenv("MATRIX_ACCESS_TOKEN", "")
         if not homeserver or not token:
             return {"error": "Matrix not configured (MATRIX_HOMESERVER, MATRIX_ACCESS_TOKEN required)"}
+        if not homeserver.startswith("https://"):
+            return {"error": "MATRIX_HOMESERVER must use https:// to protect the access token"}
         txn_id = f"hermes_{int(time.time() * 1000)}_{os.urandom(4).hex()}"
         from urllib.parse import quote
         encoded_room = quote(chat_id, safe="")
@@ -1409,6 +1416,7 @@ async def _send_matrix_via_adapter(pconfig, chat_id, message, media_files=None, 
 
     media_files = media_files or []
 
+    adapter = None
     try:
         adapter = MatrixAdapter(pconfig)
         connected = await adapter.connect()
@@ -1455,7 +1463,8 @@ async def _send_matrix_via_adapter(pconfig, chat_id, message, media_files=None, 
         return _error(f"Matrix send failed: {e}")
     finally:
         try:
-            await adapter.disconnect()
+            if adapter is not None:
+                await adapter.disconnect()
         except Exception:
             pass
 
@@ -1500,6 +1509,9 @@ async def _send_dingtalk(extra, chat_id, message):
         webhook_url = extra.get("webhook_url") or os.getenv("DINGTALK_WEBHOOK_URL", "")
         if not webhook_url:
             return {"error": "DingTalk not configured. Set DINGTALK_WEBHOOK_URL env var or webhook_url in dingtalk platform extra config."}
+        from tools.url_safety import is_safe_url
+        if not is_safe_url(webhook_url):
+            return _error("DingTalk webhook_url points to a private/internal address")
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 webhook_url,

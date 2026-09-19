@@ -97,11 +97,16 @@ class PairingStore:
         # platform adapters concurrently in threads sharing one PairingStore.
         self._lock = threading.RLock()
 
+    @staticmethod
+    def _safe_platform_name(platform: str) -> str:
+        """Strip path separators from platform names to prevent traversal."""
+        return Path(platform).name.replace("..", "")
+
     def _pending_path(self, platform: str) -> Path:
-        return PAIRING_DIR / f"{platform}-pending.json"
+        return PAIRING_DIR / f"{self._safe_platform_name(platform)}-pending.json"
 
     def _approved_path(self, platform: str) -> Path:
-        return PAIRING_DIR / f"{platform}-approved.json"
+        return PAIRING_DIR / f"{self._safe_platform_name(platform)}-approved.json"
 
     def _rate_limit_path(self) -> Path:
         return PAIRING_DIR / "_rate_limits.json"
@@ -146,11 +151,12 @@ class PairingStore:
 
     def is_approved(self, platform: str, user_id: str) -> bool:
         """Check if a user is approved (paired) on a platform."""
-        approved = self._load_json(self._approved_path(platform))
-        for approved_user_id in approved:
-            if self._user_ids_match(platform, approved_user_id, user_id):
-                return True
-        return False
+        with self._lock:
+            approved = self._load_json(self._approved_path(platform))
+            for approved_user_id in approved:
+                if self._user_ids_match(platform, approved_user_id, user_id):
+                    return True
+            return False
 
     def list_approved(self, platform: str = None) -> list:
         """List approved users, optionally filtered by platform."""

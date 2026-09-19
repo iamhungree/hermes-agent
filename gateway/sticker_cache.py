@@ -14,7 +14,7 @@ import tempfile
 import time
 from typing import Optional
 
-from hermes_cli.config import get_hermes_home
+from hermes_constants import get_hermes_home
 
 
 CACHE_PATH = get_hermes_home() / "sticker_cache.json"
@@ -119,6 +119,6 @@ def build_animated_sticker_injection(emoji: str = "") -> str:
     if emoji:
         return (
             f"[The user sent an animated sticker {emoji}~ "
-            f"I can't see animated ones yet, but the emoji suggests: {emoji}]"
+            f"Animated stickers are not visible to the assistant, but the emoji suggests: {emoji}]"
         )
-    return "[The user sent an animated sticker~ I can't see animated ones yet]"
+    return "[The user sent an animated sticker~ Animated stickers are not visible to the assistant]"

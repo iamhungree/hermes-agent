@@ -106,7 +106,8 @@ def show_status(args):
     print(f"  Python:       {sys.version.split()[0]}")
 
     env_path = get_env_path()
-    print(f"  .env file:    {check_mark(env_path.exists())} {'exists' if env_path.exists() else 'not found'}")
+    _env_exists = env_path.exists()
+    print(f"  .env file:    {check_mark(_env_exists)} {'exists' if _env_exists else 'not found'}")
 
     try:
         config = load_config()
@@ -421,7 +422,7 @@ def show_status(args):
         "WeCom Callback": ("WECOM_CALLBACK_CORP_ID", None),
         "Weixin": ("WEIXIN_ACCOUNT_ID", "WEIXIN_HOME_CHANNEL"),
         "BlueBubbles": ("BLUEBUBBLES_SERVER_URL", "BLUEBUBBLES_HOME_CHANNEL"),
-        "QQBot": ("QQ_APP_ID", "QQ_HOME_CHANNEL"),
+        "QQBot": ("QQ_APP_ID", "QQBOT_HOME_CHANNEL"),
         "Yuanbao": ("YUANBAO_APP_ID", "YUANBAO_HOME_CHANNEL"),
     }
 

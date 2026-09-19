@@ -20,7 +20,7 @@ defaults, so behaviour is unchanged when the config key is absent.
 Example ``config.yaml``::
 
     tool_output:
-      max_bytes: 100000        # terminal output cap (chars)
+      max_bytes: 100000        # terminal output cap (bytes)
       max_lines: 5000          # read_file pagination + truncation cap
       max_line_length: 2000    # per-line length cap before '... [truncated]'
 
@@ -31,6 +31,7 @@ fail because of a malformed config.
 
 from __future__ import annotations
 
+import functools
 from typing import Any, Dict
 
 # Hardcoded defaults — these match the pre-existing values, so adding
@@ -52,6 +53,7 @@ def _coerce_positive_int(value: Any, default: int) -> int:
     return iv
 
 
+@functools.lru_cache(maxsize=1)
 def get_tool_output_limits() -> Dict[str, int]:
     """Return resolved tool-output limits, reading ``tool_output`` from config.
 

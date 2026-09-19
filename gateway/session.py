@@ -456,7 +456,7 @@ class SessionEntry:
     # Set when a session was created because the previous one expired;
     # consumed once by the message handler to inject a notice into context
     was_auto_reset: bool = False
-    auto_reset_reason: Optional[str] = None  # "idle" or "daily"
+    auto_reset_reason: Optional[str] = None  # "idle", "daily", or "suspended"
     reset_had_activity: bool = False  # whether the expired session had any messages
 
     # Set by reset_session() when the user explicitly sends /new or /reset.
@@ -710,8 +710,8 @@ class SessionStore:
                     for key, entry_data in data.items():
                         try:
                             self._entries[key] = SessionEntry.from_dict(entry_data)
-                        except (ValueError, KeyError):
-                            # Skip entries with unknown/removed platform values
+                        except (ValueError, KeyError, TypeError):
+                            # Skip entries with unknown/removed platform values or null timestamps
                             continue
             except Exception as e:
                 print(f"[gateway] Warning: Failed to load sessions: {e}")
@@ -957,7 +957,7 @@ class SessionStore:
     def update_session(
         self,
         session_key: str,
-        last_prompt_tokens: int = None,
+        last_prompt_tokens: Optional[int] = None,
     ) -> None:
         """Update lightweight session metadata after an interaction."""
         with self._lock:

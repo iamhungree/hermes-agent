@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch as mock_patch
 
+import agent.auxiliary_client  # ensure submodule attribute is set on agent package before patching
 import tools.approval as approval_module
 from tools.approval import (
     _get_approval_mode,

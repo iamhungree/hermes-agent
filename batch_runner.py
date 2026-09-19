@@ -34,6 +34,7 @@ except ModuleNotFoundError:
 import json
 import logging
 import os
+import sys
 import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
@@ -142,9 +143,11 @@ def _extract_tool_stats(messages: List[Dict[str, Any]]) -> Dict[str, Dict[str, i
         if msg["role"] == "assistant" and "tool_calls" in msg and msg["tool_calls"]:
             for tool_call in msg["tool_calls"]:
                 if not tool_call or not isinstance(tool_call, dict): continue
-                tool_name = tool_call["function"]["name"]
-                tool_call_id = tool_call["id"]
-                
+                fn = tool_call.get("function")
+                if not isinstance(fn, dict) or "name" not in fn: continue
+                tool_name = fn["name"]
+                tool_call_id = tool_call.get("id", "")
+
                 # Initialize stats for this tool if not exists
                 if tool_name not in tool_stats:
                     tool_stats[tool_name] = {
@@ -152,9 +155,10 @@ def _extract_tool_stats(messages: List[Dict[str, Any]]) -> Dict[str, Dict[str, i
                         "success": 0,
                         "failure": 0
                     }
-                
+
                 tool_stats[tool_name]["count"] += 1
-                tool_calls_map[tool_call_id] = tool_name
+                if tool_call_id:  # skip empty IDs to prevent result-attribution collisions
+                    tool_calls_map[tool_call_id] = tool_name
         
         # Track tool responses
         elif msg["role"] == "tool":
@@ -228,7 +232,8 @@ def _extract_reasoning_stats(messages: List[Dict[str, Any]]) -> Dict[str, int]:
         
         content = msg.get("content", "") or ""
         has_scratchpad = "<REASONING_SCRATCHPAD>" in content
-        has_native_reasoning = bool(msg.get("reasoning", "").strip()) if msg.get("reasoning") else False
+        _reasoning = msg.get("reasoning")
+        has_native_reasoning = bool(_reasoning.strip() if isinstance(_reasoning, str) else _reasoning)
         
         if has_scratchpad or has_native_reasoning:
             with_reasoning += 1
@@ -754,8 +759,8 @@ class BatchRunner:
                         try:
                             entry = json.loads(line.strip())
                             
-                            # Skip failed entries - we want to retry these
-                            if entry.get("failed", False):
+                            # Skip failed/partial entries - we want to retry these
+                            if entry.get("failed", False) or entry.get("partial", False):
                                 continue
                             
                             # Extract the human/user prompt from conversations
@@ -1010,7 +1015,7 @@ class BatchRunner:
             checkpoint_data["completed_prompts"] = sorted(completed_prompts_set)
             self._save_checkpoint(checkpoint_data, lock=checkpoint_lock)
         except Exception as ckpt_err:
-            print(f"âš ï¸  Warning: Failed to save final checkpoint: {ckpt_err}")
+            print(f"⚠️  Warning: Failed to save final checkpoint: {ckpt_err}")
         
         # Calculate success rates
         for tool_name in total_tool_stats:
@@ -1083,8 +1088,8 @@ class BatchRunner:
             "reasoning_statistics": total_reasoning_stats,
         }
         
-        with open(self.stats_file, 'w', encoding='utf-8') as f:
-            json.dump(final_stats, f, indent=2, ensure_ascii=False)
+        from utils import atomic_json_write
+        atomic_json_write(self.stats_file, final_stats)
         
         # Print summary
         print("\n" + "=" * 70)
@@ -1156,7 +1161,7 @@ def main(
     num_workers: int = 4,
     resume: bool = False,
     verbose: bool = False,
-    list_distributions: bool = False,
+    show_distributions: bool = False,
     ephemeral_system_prompt: str = None,
     log_prefix_chars: int = 100,
     providers_allowed: str = None,
@@ -1177,14 +1182,14 @@ def main(
         batch_size (int): Number of prompts per batch
         run_name (str): Name for this run (used for output and checkpointing)
         distribution (str): Toolset distribution to use (default: "default")
-        model (str): Model name to use (default: "claude-opus-4-20250514")
+        model (str): Model name to use (default: "anthropic/claude-sonnet-4.6")
         api_key (str): API key for model authentication
         base_url (str): Base URL for model API
         max_turns (int): Maximum number of tool calling iterations per prompt (default: 10)
         num_workers (int): Number of parallel worker processes (default: 4)
         resume (bool): Resume from checkpoint if run was interrupted (default: False)
         verbose (bool): Enable verbose logging (default: False)
-        list_distributions (bool): List available toolset distributions and exit
+        show_distributions (bool): List available toolset distributions and exit
         ephemeral_system_prompt (str): System prompt used during agent execution but NOT saved to trajectories (optional)
         log_prefix_chars (int): Number of characters to show in log previews for tool calls/responses (default: 20)
         providers_allowed (str): Comma-separated list of OpenRouter providers to allow (e.g. "anthropic,openai")
@@ -1216,10 +1221,10 @@ def main(
                                --prefill_messages_file=configs/prefill_opus.json
         
         # List available distributions
-        python batch_runner.py --list_distributions
+        python batch_runner.py --show_distributions
     """
     # Handle list distributions
-    if list_distributions:
+    if show_distributions:
         from toolset_distributions import print_distribution_info
 
         print("📊 Available Toolset Distributions")
@@ -1237,15 +1242,15 @@ def main(
     # Validate required arguments
     if not dataset_file:
         print("❌ Error: --dataset_file is required")
-        return
+        sys.exit(1)
     
     if not batch_size or batch_size < 1:
         print("❌ Error: --batch_size must be a positive integer")
-        return
+        sys.exit(1)
     
     if not run_name:
         print("❌ Error: --run_name is required")
-        return
+        sys.exit(1)
     
     # Parse provider preferences (comma-separated strings to lists)
     providers_allowed_list = [p.strip() for p in providers_allowed.split(",")] if providers_allowed else None

@@ -995,8 +995,12 @@ def _normalize_codex_response(response: Any) -> tuple[Any, str]:
                 function=SimpleNamespace(name=fn_name, arguments=arguments),
             ))
         elif item_type == "custom_tool_call":
+            if item_status in {"queued", "in_progress", "incomplete"}:
+                continue
             fn_name = getattr(item, "name", "") or ""
-            arguments = getattr(item, "input", "{}")
+            arguments = getattr(item, "input", None)
+            if arguments is None:
+                arguments = "{}"
             if not isinstance(arguments, str):
                 arguments = json.dumps(arguments, ensure_ascii=False)
             raw_call_id = getattr(item, "call_id", None)

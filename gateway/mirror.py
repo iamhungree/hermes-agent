@@ -145,7 +145,7 @@ def _find_session_id(
         if len(distinct_user_ids) > 1:
             return None
 
-    best_entry = max(candidates, key=lambda entry: entry.get("updated_at", ""))
+    best_entry = max(candidates, key=lambda entry: entry.get("updated_at") or "")
     return best_entry.get("session_id")
 
 

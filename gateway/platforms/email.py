@@ -40,6 +40,7 @@ from gateway.platforms.base import (
     SendResult,
     cache_document_from_bytes,
     cache_image_from_bytes,
+    validate_media_delivery_path,
 )
 from gateway.config import Platform, PlatformConfig
 
@@ -251,10 +252,22 @@ class EmailAdapter(BasePlatformAdapter):
         self._address = os.getenv("EMAIL_ADDRESS", "")
         self._password = os.getenv("EMAIL_PASSWORD", "")
         self._imap_host = os.getenv("EMAIL_IMAP_HOST", "")
-        self._imap_port = int(os.getenv("EMAIL_IMAP_PORT", "993"))
+        try:
+            self._imap_port = int(os.getenv("EMAIL_IMAP_PORT", "993"))
+        except ValueError:
+            logger.warning("[Email] Invalid EMAIL_IMAP_PORT; using default 993")
+            self._imap_port = 993
         self._smtp_host = os.getenv("EMAIL_SMTP_HOST", "")
-        self._smtp_port = int(os.getenv("EMAIL_SMTP_PORT", "587"))
-        self._poll_interval = int(os.getenv("EMAIL_POLL_INTERVAL", "15"))
+        try:
+            self._smtp_port = int(os.getenv("EMAIL_SMTP_PORT", "587"))
+        except ValueError:
+            logger.warning("[Email] Invalid EMAIL_SMTP_PORT; using default 587")
+            self._smtp_port = 587
+        try:
+            self._poll_interval = int(os.getenv("EMAIL_POLL_INTERVAL", "15"))
+        except ValueError:
+            logger.warning("[Email] Invalid EMAIL_POLL_INTERVAL; using default 15")
+            self._poll_interval = 15
 
         # Skip attachments — configured via config.yaml:
         #   platforms:
@@ -327,7 +340,7 @@ class EmailAdapter(BasePlatformAdapter):
 
         self._running = True
         self._poll_task = asyncio.create_task(self._poll_loop())
-        print(f"[Email] Connected as {self._address}")
+        logger.info("[Email] Connected as %s", self._address)
         return True
 
     async def disconnect(self) -> None:
@@ -459,7 +472,7 @@ class EmailAdapter(BasePlatformAdapter):
 
         # Build message text: include subject as context
         text = body
-        if subject and not subject.startswith("Re:"):
+        if subject and not subject.lower().startswith("re:"):
             text = f"[Subject: {subject}]\n\n{body}"
 
         # Determine message type and media
@@ -532,7 +545,7 @@ class EmailAdapter(BasePlatformAdapter):
         # Thread context for reply
         ctx = self._thread_context.get(to_addr, {})
         subject = ctx.get("subject", "Hermes Agent")
-        if not subject.startswith("Re:"):
+        if not subject.lower().startswith("re:"):
             subject = f"Re: {subject}"
         msg["Subject"] = subject
 
@@ -603,10 +616,11 @@ class EmailAdapter(BasePlatformAdapter):
                 body_parts.append(alt_text)
             if image_url.startswith("file://"):
                 local_path = _unquote(image_url[7:])
-                if Path(local_path).exists():
-                    local_paths.append(local_path)
+                safe = validate_media_delivery_path(local_path)
+                if safe is not None:
+                    local_paths.append(safe)
                 else:
-                    logger.warning("[Email] Skipping missing image: %s", local_path)
+                    logger.warning("[Email] Skipping unsafe or missing image path: %s", local_path)
             else:
                 # Remote URLs just get linked in the body (parity with send_image)
                 body_parts.append(f"Image: {image_url}")
@@ -642,7 +656,7 @@ class EmailAdapter(BasePlatformAdapter):
 
         ctx = self._thread_context.get(to_addr, {})
         subject = ctx.get("subject", "Hermes Agent")
-        if not subject.startswith("Re:"):
+        if not subject.lower().startswith("re:"):
             subject = f"Re: {subject}"
         msg["Subject"] = subject
 
@@ -665,7 +679,7 @@ class EmailAdapter(BasePlatformAdapter):
                     part = MIMEBase("application", "octet-stream")
                     part.set_payload(f.read())
                     encoders.encode_base64(part)
-                    part.add_header("Content-Disposition", f"attachment; filename={p.name}")
+                    part.add_header("Content-Disposition", "attachment", filename=p.name)
                     msg.attach(part)
             except Exception as e:
                 logger.warning("[Email] Failed to attach %s: %s", file_path, e)
@@ -723,7 +737,7 @@ class EmailAdapter(BasePlatformAdapter):
 
         ctx = self._thread_context.get(to_addr, {})
         subject = ctx.get("subject", "Hermes Agent")
-        if not subject.startswith("Re:"):
+        if not subject.lower().startswith("re:"):
             subject = f"Re: {subject}"
         msg["Subject"] = subject
 
@@ -746,7 +760,7 @@ class EmailAdapter(BasePlatformAdapter):
             part = MIMEBase("application", "octet-stream")
             part.set_payload(f.read())
             encoders.encode_base64(part)
-            part.add_header("Content-Disposition", f"attachment; filename={fname}")
+            part.add_header("Content-Disposition", "attachment", filename=fname)
             msg.attach(part)
 
         smtp = smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=30)
