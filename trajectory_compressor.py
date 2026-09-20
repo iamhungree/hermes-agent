@@ -935,33 +935,6 @@ Write only the summary, starting with "[CONTEXT SUMMARY]:" prefix."""
         
         return result, metrics
     
-    def process_entry(self, entry: Dict[str, Any]) -> Tuple[Dict[str, Any], TrajectoryMetrics]:
-        """
-        Process a single JSONL entry.
-        
-        Args:
-            entry: JSONL entry containing 'conversations' field
-            
-        Returns:
-            Tuple of (processed_entry, metrics)
-        """
-        if "conversations" not in entry:
-            metrics = TrajectoryMetrics()
-            return entry, metrics
-        
-        trajectory = entry["conversations"]
-        compressed_trajectory, metrics = self.compress_trajectory(trajectory)
-        
-        # Create new entry with compressed trajectory
-        result = entry.copy()
-        result["conversations"] = compressed_trajectory
-        
-        # Add compression metadata if enabled
-        if self.config.metrics_per_trajectory and metrics.was_compressed:
-            result["compression_metrics"] = metrics.to_dict()
-        
-        return result, metrics
-    
     def process_directory(self, input_dir: Path, output_dir: Path):
         """
         Process all JSONL files in a directory using async parallel processing.

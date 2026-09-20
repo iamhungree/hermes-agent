@@ -3038,7 +3038,13 @@ def run_conversation(
                             f"error retry backoff ({retry_count}/{max_retries}), "
                             f"{int(sleep_end - time.time())}s remaining"
                         )
-        
+            finally:
+                # Guarantee spinner cleanup even on BaseException (KeyboardInterrupt,
+                # SystemExit) which escapes the except Exception handler above.
+                if thinking_spinner:
+                    thinking_spinner.stop("")
+                    thinking_spinner = None
+
         # If the API call was interrupted, skip response processing
         if interrupted:
             _turn_exit_reason = "interrupted_during_api_call"

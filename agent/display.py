@@ -515,9 +515,11 @@ def _summarize_rendered_diff_sections(
         break
 
     if omitted_files or omitted_lines:
-        summary = f"… omitted {omitted_lines} diff line(s)"
+        _lword = "line" if omitted_lines == 1 else "lines"
+        summary = f"… omitted {omitted_lines} diff {_lword}"
         if omitted_files:
-            summary += f" across {omitted_files} additional file(s)/section(s)"
+            _fword = "file/section" if omitted_files == 1 else "files/sections"
+            summary += f" across {omitted_files} additional {_fword}"
         rendered.append(f"{_diff_hunk()}{summary}{_ANSI_RESET}")
 
     return rendered

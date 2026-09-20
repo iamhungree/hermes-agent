@@ -551,9 +551,11 @@ class SessionDB:
                         )
                     except sqlite3.OperationalError as exc:
                         # Expected: "duplicate column name" from a race or
-                        # re-run.  Unexpected: "Cannot add a NOT NULL column
-                        # with default value NULL" from a schema mistake.
-                        # Log at DEBUG so it's visible in agent.log.
+                        # re-run.  Any other OperationalError (e.g. "Cannot
+                        # add a NOT NULL column with default value NULL") is a
+                        # real schema mistake and must not be silenced.
+                        if "duplicate column name" not in str(exc).lower():
+                            raise
                         logger.debug(
                             "reconcile %s.%s: %s", table_name, col_name, exc,
                         )

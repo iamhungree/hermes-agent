@@ -11821,8 +11821,8 @@ class HermesCLI:
                 if _api_calls >= getattr(self.agent, "max_iterations", 90):
                     _max_iter = getattr(self.agent, "max_iterations", 90)
                     _cprint(
-                        f"\n{_DIM}⚠ Iteration budget reached "
-                        f"({_api_calls}/{_max_iter}) — "
+                        f"\n{_DIM}⚠ Agent stopped after {_api_calls} steps "
+                        f"(limit: {_max_iter}) — "
                         f"response may be incomplete{_RST}"
                     )
 
