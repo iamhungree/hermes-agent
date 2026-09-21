@@ -3151,7 +3151,7 @@ def _(rid, params: dict) -> dict:
         return err
     with session["history_lock"]:
         if session.get("running"):
-            return _err(rid, 4009, "session busy")
+            return _err(rid, 4009, "session busy — /interrupt the current turn before submitting a new message")
         session["running"] = True
 
     _start_agent_build(sid, session)

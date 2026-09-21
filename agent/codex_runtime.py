@@ -179,6 +179,7 @@ def run_codex_app_server_turn(
 def run_codex_stream(agent, api_kwargs: dict, client: Any = None, on_first_delta: callable = None):
     """Execute one streaming Responses API request and return the final response."""
     import httpx as _httpx
+    from agent.retry_utils import jittered_backoff
 
     active_client = client or agent._ensure_primary_openai_client(reason="codex_stream_direct")
     max_stream_retries = 1
@@ -270,7 +271,6 @@ def run_codex_stream(agent, api_kwargs: dict, client: Any = None, on_first_delta
                 return final_response
         except (_httpx.RemoteProtocolError, _httpx.ReadTimeout, _httpx.ConnectError, ConnectionError) as exc:
             if attempt < max_stream_retries:
-                from agent.retry_utils import jittered_backoff
                 delay = jittered_backoff(attempt + 1, base_delay=1.0, max_delay=8.0)
                 logger.debug(
                     "Codex Responses stream transport failed (attempt %s/%s); retrying in %.1fs. %s error=%s",
@@ -319,7 +319,6 @@ def run_codex_stream(agent, api_kwargs: dict, client: Any = None, on_first_delta
                 or "Expected to have received \"response.created\"" in err_text
             )
             if (missing_completed or prelude_error) and attempt < max_stream_retries:
-                from agent.retry_utils import jittered_backoff
                 delay = jittered_backoff(attempt + 1, base_delay=1.0, max_delay=8.0)
                 logger.debug(
                     "Responses stream %s (attempt %s/%s); retrying in %.1fs. %s",
@@ -345,6 +344,7 @@ def run_codex_stream(agent, api_kwargs: dict, client: Any = None, on_first_delta
 
 def run_codex_create_stream_fallback(agent, api_kwargs: dict, client: Any = None):
     """Fallback path for stream completion edge cases on Codex-style Responses backends."""
+    from run_agent import _StreamErrorEvent
     active_client = client or agent._ensure_primary_openai_client(reason="codex_create_stream_fallback")
     fallback_kwargs = dict(api_kwargs)
     fallback_kwargs["stream"] = True
@@ -393,7 +393,6 @@ def run_codex_create_stream_fallback(agent, api_kwargs: dict, client: Any = None
                 if not err_param and isinstance(event, dict):
                     err_param = event.get("param")
                 err_message = (err_message or "stream emitted error event").strip()
-                from run_agent import _StreamErrorEvent
                 raise _StreamErrorEvent(err_message, code=err_code, param=err_param)
 
             # Collect output items and text deltas for backfill
@@ -403,7 +402,7 @@ def run_codex_create_stream_fallback(agent, api_kwargs: dict, client: Any = None
                     done_item = event.get("item")
                 if done_item is not None:
                     collected_output_items.append(done_item)
-            elif event_type in {"response.output_text.delta",}:
+            elif event_type == "response.output_text.delta":
                 delta = getattr(event, "delta", "")
                 if not delta and isinstance(event, dict):
                     delta = event.get("delta", "")

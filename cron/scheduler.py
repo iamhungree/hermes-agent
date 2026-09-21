@@ -1316,6 +1316,8 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
                 f"**Run Time:** {_hermes_now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
                 "Script gate returned `wakeAgent=false` — agent skipped.\n"
             )
+            if _session_db:
+                _session_db.close()
             return True, silent_doc, SILENT_MARKER, None
 
     try:
@@ -1342,9 +1344,13 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
             "and the match is a false positive, rephrase the content to avoid "
             "the threat pattern (`tools/cronjob_tools.py::_CRON_THREAT_PATTERNS`)."
         )
+        if _session_db:
+            _session_db.close()
         return False, blocked_doc, "", str(block_exc)
     if prompt is None:
         logger.info("Job '%s': script produced no output, skipping AI call.", job_name)
+        if _session_db:
+            _session_db.close()
         return True, "", SILENT_MARKER, None
     _cron_session_id = f"cron_{job_id}_{_hermes_now().strftime('%Y%m%d_%H%M%S')}"
 

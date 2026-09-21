@@ -956,6 +956,8 @@ class SessionDB:
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get a session by ID."""
         with self._lock:
+            if self._conn is None:
+                return None
             cursor = self._conn.execute(
                 "SELECT * FROM sessions WHERE id = ?", (session_id,)
             )
@@ -980,6 +982,8 @@ class SessionDB:
             .replace("_", "\\_")
         )
         with self._lock:
+            if self._conn is None:
+                return None
             cursor = self._conn.execute(
                 "SELECT id FROM sessions WHERE id LIKE ? ESCAPE '\\' ORDER BY started_at DESC LIMIT 2",
                 (f"{escaped}%",),
@@ -1068,6 +1072,8 @@ class SessionDB:
     def get_session_title(self, session_id: str) -> Optional[str]:
         """Get the title for a session, or None."""
         with self._lock:
+            if self._conn is None:
+                return None
             cursor = self._conn.execute(
                 "SELECT title FROM sessions WHERE id = ?", (session_id,)
             )
@@ -1077,6 +1083,8 @@ class SessionDB:
     def get_session_by_title(self, title: str) -> Optional[Dict[str, Any]]:
         """Look up a session by exact title. Returns session dict or None."""
         with self._lock:
+            if self._conn is None:
+                return None
             cursor = self._conn.execute(
                 "SELECT * FROM sessions WHERE title = ?", (title,)
             )
