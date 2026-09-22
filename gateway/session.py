@@ -15,7 +15,7 @@ import json
 import threading
 import uuid
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Any
 
@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 
 def _now() -> datetime:
-    """Return the current local time."""
-    return datetime.now()
+    """Return the current UTC time."""
+    return datetime.now(timezone.utc)
 
 
 # ---------------------------------------------------------------------------

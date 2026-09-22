@@ -220,13 +220,13 @@ def build_tool_preview(tool_name: str, args: dict, max_len: int | None = None) -
         target = args.get("target", "")
         if action == "add":
             content = _oneline(args.get("content", ""))
-            return f"+{target}: \"{content[:25]}{'...' if len(content) > 25 else ''}\""
+            return f"add {target}: \"{content[:25]}{'...' if len(content) > 25 else ''}\""
         elif action == "replace":
             old = _oneline(args.get("old_text") or "") or "(no content)"
-            return f"~{target}: \"{old[:20]}\""
+            return f"replace {target}: \"{old[:20]}\""
         elif action == "remove":
             old = _oneline(args.get("old_text") or "") or "(no content)"
-            return f"-{target}: \"{old[:20]}\""
+            return f"remove {target}: \"{old[:20]}\""
         return action
 
     if tool_name == "send_message":
