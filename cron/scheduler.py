@@ -823,13 +823,21 @@ def _get_script_timeout() -> int:
     return _DEFAULT_SCRIPT_TIMEOUT
 
 
-def _run_job_script(script_path: str) -> tuple[bool, str]:
+def _run_job_script(script_path: str, workdir: Optional[str] = None) -> tuple[bool, str]:
     """Execute a cron job's data-collection script and capture its output.
 
     Scripts must reside within HERMES_HOME/scripts/.  Both relative and
     absolute paths are resolved and validated against this directory to
     prevent arbitrary script execution via path traversal or absolute
     path injection.
+
+    Args:
+        script_path: Path to the script (resolved relative to HERMES_HOME/scripts/).
+        workdir: Optional working directory for the subprocess.  When provided
+            (and valid), the script's subprocess runs from this directory instead
+            of the script's own parent directory.  This is how ``no_agent`` jobs
+            honour their ``workdir`` configuration so relative paths inside the
+            script behave predictably.
 
     Supported interpreters (chosen by file extension):
 
@@ -914,12 +922,13 @@ def _run_job_script(script_path: str) -> tuple[bool, str]:
 
     try:
         popen_kwargs = {"creationflags": windows_hide_flags()} if sys.platform == "win32" else {}
+        effective_cwd = workdir if (workdir and Path(workdir).is_dir()) else str(path.parent)
         result = subprocess.run(
             argv,
             capture_output=True,
             text=True,
             timeout=script_timeout,
-            cwd=str(path.parent),
+            cwd=effective_cwd,
             env=run_env,
             **popen_kwargs,
         )
@@ -1199,28 +1208,10 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
             return False, "", "", err
 
         # Apply workdir if configured — lets scripts use predictable relative
-        # paths. For no_agent jobs this is just the subprocess cwd (not an
-        # agent TERMINAL_CWD bridge).
+        # paths.  Pass it directly to _run_job_script so subprocess.run uses it
+        # as cwd; this is thread-safe (no process-global os.chdir needed).
         _job_workdir = (job.get("workdir") or "").strip() or None
-        _prior_cwd = None
-        if _job_workdir and Path(_job_workdir).is_dir():
-            _prior_cwd = os.getcwd()
-            try:
-                os.chdir(_job_workdir)
-            except OSError:
-                _prior_cwd = None
-
-        try:
-            ok, output = _run_job_script(script_path)
-        finally:
-            if _prior_cwd is not None:
-                try:
-                    os.chdir(_prior_cwd)
-                except OSError as _chdir_exc:
-                    logger.warning(
-                        "Failed to restore working directory to %s after job: %s",
-                        _prior_cwd, _chdir_exc,
-                    )
+        ok, output = _run_job_script(script_path, workdir=_job_workdir)
 
         now_iso = _hermes_now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1924,7 +1915,7 @@ def tick(verbose: bool = True, adapters=None, loop=None) -> int:
                 # responses: do not deliver a blank message, and let the
                 # empty-response guard below mark the run as a soft failure.
                 should_deliver = bool(deliver_content.strip())
-                if should_deliver and success and deliver_content.strip().upper() == SILENT_MARKER:
+                if should_deliver and success and SILENT_MARKER in deliver_content.strip().upper():
                     logger.info("Job '%s': agent returned %s — skipping delivery", job["id"], SILENT_MARKER)
                     should_deliver = False
 
