@@ -35,6 +35,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from hermes_constants import get_hermes_home
 from agent.skill_utils import is_excluded_skill_path
+from tools.path_security import validate_within_dir
 
 logger = logging.getLogger(__name__)
 
@@ -551,6 +552,9 @@ def restore_skill(skill_name: str) -> Tuple[bool, str]:
 
     src = candidates[0]
     dest = _skills_dir() / skill_name
+    containment_error = validate_within_dir(dest, _skills_dir())
+    if containment_error:
+        return False, f"invalid skill name '{skill_name}': {containment_error}"
     if dest.exists():
         return False, f"destination already exists: {dest}"
 

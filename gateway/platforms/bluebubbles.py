@@ -9,6 +9,7 @@ downloading from PR #4588 (YuhangLin).
 """
 
 import asyncio
+import hmac
 import json
 import logging
 import os
@@ -59,6 +60,7 @@ _MESSAGE_EVENTS = {"new-message", "message", "updated-message"}
 # Log redaction patterns
 _PHONE_RE = re.compile(r"\+?\d{7,15}")
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
+_PASSWORD_QS_RE = re.compile(r"(password=)[^&\s'\"]*", re.IGNORECASE)
 
 
 def _redact(text: str) -> str:
@@ -66,6 +68,17 @@ def _redact(text: str) -> str:
     text = _PHONE_RE.sub("[REDACTED]", text)
     text = _EMAIL_RE.sub("[REDACTED]", text)
     return text
+
+
+def _redact_exc(exc: BaseException) -> str:
+    """Stringify an exception with the ``password=`` query param masked.
+
+    httpx embeds the full request URL (including our password query
+    param, see ``_api_url``) in ``HTTPStatusError``/``RequestError``
+    messages, so any bare ``%s``-logging of these exceptions leaks the
+    BlueBubbles server password into ``agent.log``/``errors.log``.
+    """
+    return _PASSWORD_QS_RE.sub(r"\1***", str(exc))
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +192,7 @@ class BlueBubblesAdapter(BasePlatformAdapter):
             )
         except Exception as exc:
             logger.error(
-                "[bluebubbles] cannot reach server at %s: %s", self.server_url, exc
+                "[bluebubbles] cannot reach server at %s: %s", self.server_url, _redact_exc(exc)
             )
             if self.client:
                 await self.client.aclose()
@@ -309,7 +322,7 @@ class BlueBubblesAdapter(BasePlatformAdapter):
         except Exception as exc:
             logger.warning(
                 "[bluebubbles] failed to register webhook with server: %s",
-                exc,
+                _redact_exc(exc),
             )
             return False
 
@@ -749,7 +762,7 @@ class BlueBubblesAdapter(BasePlatformAdapter):
             logger.warning(
                 "[bluebubbles] failed to download attachment %s: %s",
                 _redact(att_guid),
-                exc,
+                _redact_exc(exc),
             )
             return None
 
@@ -788,7 +801,7 @@ class BlueBubblesAdapter(BasePlatformAdapter):
             or request.headers.get("x-guid")
             or request.headers.get("x-bluebubbles-guid")
         )
-        if token != self.password:
+        if not token or not hmac.compare_digest(token, self.password):
             return web.json_response({"error": "unauthorized"}, status=401)
         try:
             raw = await request.read()

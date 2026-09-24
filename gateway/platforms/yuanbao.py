@@ -150,6 +150,28 @@ _YB_RES_REF_RE = re.compile(
 # Media kinds that can be resolved and injected into the model context
 _RESOLVABLE_MEDIA_KINDS = frozenset({"image", "file"})
 
+# Hostname suffixes trusted for direct (unresolved) media download. Yuanbao
+# COS hostnames legitimately resolve to private IPs (see
+# ``_resolve_media_urls`` docstring), so this path intentionally bypasses
+# the generic SSRF guard in vision_tools — but it must not become an open
+# fetch-any-URL proxy for a sender-supplied ``url`` that lacks a
+# ``resourceId``.
+_TRUSTED_MEDIA_HOST_SUFFIXES = (".tencent.com", ".myqcloud.com")
+
+
+def _is_trusted_media_host(url: str) -> bool:
+    try:
+        host = (urllib.parse.urlparse(url).hostname or "").lower()
+    except Exception:
+        return False
+    if not host:
+        return False
+    return any(
+        host == suffix.lstrip(".") or host.endswith(suffix)
+        for suffix in _TRUSTED_MEDIA_HOST_SUFFIXES
+    )
+
+
 # Strip page indicators like (1/3) appended by BasePlatformAdapter
 _INDICATOR_RE = re.compile(r'\s*\(\d+/\d+\)$')
 
@@ -2316,6 +2338,10 @@ class MediaResolveMiddleware(InboundMiddleware):
         resource_ids = query.get("resourceId") or query.get("resourceid") or []
         resource_id = str(resource_ids[0]).strip() if resource_ids else ""
         if not resource_id:
+            if not _is_trusted_media_host(url):
+                raise ValueError(
+                    f"refusing to fetch untrusted media host: {parsed.hostname!r}"
+                )
             return url
 
         try:

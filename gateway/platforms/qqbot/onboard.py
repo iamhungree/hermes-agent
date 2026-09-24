@@ -188,7 +188,8 @@ def qr_register(timeout_seconds: int = 600) -> Optional[dict]:
         while time.monotonic() < deadline:
             try:
                 status, app_id, encrypted_secret, user_openid = _poll_bind_result(task_id)
-            except Exception:
+            except Exception as exc:
+                logger.debug("[QQBot onboard] Poll attempt failed: %s", exc)
                 time.sleep(ONBOARD_POLL_INTERVAL)
                 continue
 

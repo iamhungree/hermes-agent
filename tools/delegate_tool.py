@@ -676,6 +676,7 @@ def _strip_blocked_tools(toolsets: List[str]) -> List[str]:
         "clarify",
         "memory",
         "code_execution",
+        "messaging",  # owns send_message; see DELEGATE_BLOCKED_TOOLS
     }
     return [t for t in toolsets if t not in blocked_toolset_names]
 
