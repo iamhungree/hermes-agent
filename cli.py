@@ -8027,7 +8027,7 @@ class HermesCLI:
             
             print()
             print("  To start the gateway:")
-            print("    python cli.py --gateway")
+            print("    hermes gateway run")
             print()
             print(f"  Configuration file: {display_hermes_home()}/config.yaml")
             print()
@@ -8312,7 +8312,8 @@ class HermesCLI:
         elif canonical == "reload":
             from hermes_cli.config import reload_env
             count = reload_env()
-            print(f"  Reloaded .env ({count} var(s) updated)")
+            _reload_detail = f"{count} var(s) updated" if count else "no changes"
+            print(f"  Reloaded .env ({_reload_detail})")
         elif canonical == "reload-mcp":
             # Interactive reload: confirm first (unless the user has opted out).
             # The auto-reload path (file watcher) calls _reload_mcp directly
